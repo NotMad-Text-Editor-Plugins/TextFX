@@ -5949,10 +5949,10 @@ EXTERNC void insertDateTime(DWORD format) {
 	SYSTEMTIME st;
 
 	GetLocalTime(&st);
-	//GetDateFormat(LOCALE_USER_DEFAULT, format, &st, NULL, date, sizeof(date));
-	GetDateFormatA(LOCALE_USER_DEFAULT, 0, &st, "yyyy.MM.dd", date, sizeof(date)); // 2006.05.01
-	//GetTimeFormat(LOCALE_USER_DEFAULT, TIME_NOSECONDS, &st, NULL, time, sizeof(time));
-	GetTimeFormatA(LOCALE_USER_DEFAULT, 0, &st, "HH:mm", time, sizeof(time));
+	GetDateFormatA(LOCALE_USER_DEFAULT, format, &st, NULL, date, sizeof(date));
+	//GetDateFormatA(LOCALE_USER_DEFAULT, 0, &st, "yyyy.MM.dd", date, sizeof(date)); // 2006.05.01
+	GetTimeFormatA(LOCALE_USER_DEFAULT, TIME_NOSECONDS, &st, NULL, time, sizeof(time));
+	//GetTimeFormatA(LOCALE_USER_DEFAULT, 0, &st, "HH:mm", time, sizeof(time));
 
 	//dateTime = smprintf(_T("%s %s"), time, date);
 	sprintf(time,"%s %s", time, date);
