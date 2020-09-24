@@ -3,7 +3,7 @@ TextFX is a Notepad++ plugin which performs a variety of common conversions on s
 
 https://notepad-plus-plus.org/
 
-# Obsoletion of TextFX
+# Horizon of TextFX
 Currently, some plugins are taking over some areas where TextFX is being used:
   - Code alignment
   - NppConverter
