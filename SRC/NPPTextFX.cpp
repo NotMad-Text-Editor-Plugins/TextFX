@@ -5945,24 +5945,20 @@ PFUNCPLUGINCMD pfinsertCurrentFileName(void) {insertCurrentPath(NPPM_GETFILENAME
 PFUNCPLUGINCMD pfinsertCurrentDirectory(void){insertCurrentPath(NPPM_GETCURRENTDIRECTORY);}
 
 EXTERNC void insertDateTime(DWORD format) {
-	TCHAR date[128], time[128];
-	TCHAR *dateTime;
+	CHAR date[128], time[128];
 	SYSTEMTIME st;
 
 	GetLocalTime(&st);
-	GetDateFormat(LOCALE_USER_DEFAULT, format, &st, NULL, date, sizeof(date));
-	//GetDateFormat(LOCALE_USER_DEFAULT, 0, &st, "yyyy.MM.dd", date, sizeof(date)); // 2006.05.01
-	GetTimeFormat(LOCALE_USER_DEFAULT, TIME_NOSECONDS, &st, NULL, time, sizeof(time));
-	//GetTimeFormat(LOCALE_USER_DEFAULT, 0, &st, "HH:mm", time, sizeof(time));
+	//GetDateFormat(LOCALE_USER_DEFAULT, format, &st, NULL, date, sizeof(date));
+	GetDateFormatA(LOCALE_USER_DEFAULT, 0, &st, "yyyy.MM.dd", date, sizeof(date)); // 2006.05.01
+	//GetTimeFormat(LOCALE_USER_DEFAULT, TIME_NOSECONDS, &st, NULL, time, sizeof(time));
+	GetTimeFormatA(LOCALE_USER_DEFAULT, 0, &st, "HH:mm", time, sizeof(time));
 
-	dateTime = smprintf(_T("%s %s"), time, date);
-	//dateTime=smprintf("%s %s", date, time); // 2006.05.01 16:31
-	if (dateTime) {
-		INT_CURRENTEDIT;
-		GET_CURRENTEDIT;
-		SENDMSGTOCED(currentEdit, SCI_REPLACESEL, 0, dateTime);
-		freesafe(dateTime, _T("insertDateTime"));
-	}
+	//dateTime = smprintf(_T("%s %s"), time, date);
+	sprintf(time,"%s %s", time, date);
+	INT_CURRENTEDIT;
+	GET_CURRENTEDIT;
+	SENDMSGTOCED(currentEdit, SCI_REPLACESEL, 0, time);
 }
 EXTERNC PFUNCPLUGINCMD pfinsertShortDateTime(void) {insertDateTime(DATE_SHORTDATE);}
 EXTERNC PFUNCPLUGINCMD pfinsertLongDateTime(void) {insertDateTime(DATE_LONGDATE);}

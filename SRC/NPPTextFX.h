@@ -11,8 +11,8 @@
 #else
 #define snprintf snprintf_unsafe
 #endif
-#define sprintf sprintf_unsafe
-#define strncpy strncpy_unsafe
+//#define sprintf sprintf_unsafe
+//#define strncpy strncpy_unsafe
 
 #ifndef EXTERNC
 #ifdef __cplusplus
