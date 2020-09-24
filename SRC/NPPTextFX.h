@@ -185,6 +185,7 @@ EXTERNC size_t vsarmprintfpath(TCHAR **dest, size_t *destsz, size_t *destlen,con
 EXTERNC size_t sarmprintfpath(TCHAR **dest,size_t *destsz,size_t *destlen,const TCHAR *format,...);
 EXTERNC TCHAR *smprintfpath(const TCHAR *format,...);
 EXTERNC int MessageBoxFree(HWND hWnd,TCHAR *lpText,LPCTSTR lpCaption,UINT uType);
+EXTERNC int MessageBoxFreeA(HWND hWnd,CHAR *lpText,LPSTR lpCaption,UINT uType);
 EXTERNC int memmovearm(void **dest, size_t *destsz, size_t *destlen, TCHAR *destp, TCHAR *sourcep
 #if NPPDEBUG
 ,int notest
@@ -204,9 +205,11 @@ EXTERNC int memmovearm(void **dest, size_t *destsz, size_t *destlen, TCHAR *dest
 EXTERNC void memcqspnstart(const TCHAR *find, unsigned findl, unsigned *quick);
 EXTERNC void memcqspnstartA(const CHAR *find, unsigned findl, unsigned *quick);
 EXTERNC TCHAR *memcqspn(const TCHAR *buf, const TCHAR *end, const unsigned *quick);
+EXTERNC CHAR *memcqspnA(const CHAR *buf, const CHAR *end, const unsigned *quick);
 EXTERNC TCHAR *memqspn(const TCHAR *buf, const TCHAR *end, const unsigned *quick);
 EXTERNC CHAR *memqspnA(const CHAR *buf, const CHAR *end, const unsigned *quick);
 EXTERNC TCHAR *memcspn(const TCHAR *buf, const TCHAR *end, const TCHAR *find, unsigned findl);
+EXTERNC CHAR *memcspnA(const CHAR *buf, const CHAR *end, const CHAR *find, unsigned findl);
 EXTERNC char *memcspn_chr(const char *buf, const char *end, const char *find, unsigned findl);
 EXTERNC TCHAR *memspn(const TCHAR *buf, const TCHAR *end, const TCHAR *find, unsigned findl);
 EXTERNC TCHAR *memstr(const TCHAR *buf, const TCHAR *end, const TCHAR *find, unsigned findl);
@@ -348,3 +351,7 @@ EXTERNC PFUNCPLUGINCMD pfMarkWordFindForward(void);
 EXTERNC PFUNCPLUGINCMD pfMarkWordFindCaseSensitive(void);
 EXTERNC PFUNCPLUGINCMD pfMarkWordFindWholeWord(void);
 // SUBSECTION: END
+
+
+EXTERNC unsigned encodeURIcomponent(TCHAR **dest, size_t *destsz, size_t *destlen);
+EXTERNC unsigned encodeURIcomponentA(CHAR **dest, size_t *destsz, size_t *destlen);

@@ -18,6 +18,7 @@ namespace Tests
 
 	LRESULT mockSendScintillaMessage(BOOL which, UINT Msg, WPARAM wParam, LPARAM lParam);
 	void setText(const TCHAR* textIn);
+	void setTextA(const CHAR* textIn);
 	TCHAR* convertTextbuffer(const char* input = NULL);
 	void resetScintillaSimulator();
 }

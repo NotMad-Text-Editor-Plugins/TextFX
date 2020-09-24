@@ -28,7 +28,7 @@ namespace Tests
 			int change;
 			size_t destsz = 0;
 			size_t stringLen = 0;
-			const TCHAR testString[] = _T("This is the test string to be copied. It contains UTF-8 characters: £ $ öäå ÖÄÅ! Also US-ASCII.");
+			const TCHAR testString[] = _T("This is the test string to be copied. It contains UTF-8 characters: ï¿½ $ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½! Also US-ASCII.");
 
 			change = strncpyarmsafe(&dest, &destsz, &stringLen, testString, wcslen(testString), _T("NPPGetSpecialFolderLocationarm"));
 			Assert::IsNotNull(dest);

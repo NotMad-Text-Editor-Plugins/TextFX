@@ -194,6 +194,7 @@ namespace Tests
 					tmpChar = ptr++;
 				}
 			}
+
 			if (!tmpChar)
 				return 0;
 			return (int)(tmpChar - textBuffer);
@@ -229,6 +230,17 @@ namespace Tests
 			Assert::Fail(_T("Too long!"));
 		}
 		textBuffer[textBufferConvertedLength] = '\0';
+	}
+
+	void setTextA(const CHAR* textIn)
+	{
+		size_t textLength = strlen(textIn);
+		if (!textIn || !textLength) {
+			resetScintillaSimulator();
+			return;
+		}
+
+		strcpy(textBuffer, textIn);
 	}
 
 	TCHAR* convertTextbuffer(const char* input)

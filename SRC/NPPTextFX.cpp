@@ -269,12 +269,13 @@ fnd2:
 EXTERNC void mallocsafedone(void) {
   unsigned badct;
   unsigned i;
-  for(badct=0, i=0; i<NELEM(g_mallocstack); i++)
+  for(badct=0, i=0; i<NELEM(g_mallocstack); i++) {
 	  if (g_mallocstack[i].buf) {
 		  badct++;
 		  MessageBox(0, g_mallocstack[i].title, _T("mallocsafedone"), MB_OK|MB_ICONSTOP);
 		  free(freesafebounds(g_mallocstack[i].buf, g_mallocstack[i].len, _T("mallocsafedone")));
 	  }
+  }
   if (badct) {
     TCHAR debug[256];
 	snprintfX(debug, 256, _T("%u malloc() buffers not free'd\n"), badct);
@@ -429,11 +430,11 @@ EXTERNC int armrealloc(TCHAR **dest, size_t *destsz, size_t newsize, int strateg
     *destsz = (strategy==ARMSTRATEGY_INCREASE) ? roundtonextpower(newsize) : newsize;
 doit:
     dest1=*dest;
-    dest1= (dest1) ? (TCHAR *)reallocsafe(dest1, *destsz, THETITLE) : (TCHAR *)mallocsafe(*destsz, THETITLE);
+    dest1= (dest1) ? (TCHAR *)reallocsafe(dest1, sizeof(TCHAR)**destsz, THETITLE) : (TCHAR *)mallocsafe(sizeof(TCHAR)**destsz, THETITLE);
       //if (dest1) strcpy((dest1+*destsz-1),"#$"); // $ is beyond string
 	rv = dest1 - *dest;
     if (dest1 && clear && *destsz>oldsz)
-		memset((char*)dest1+oldsz,0,*destsz-oldsz);
+		memset((char*)dest1+oldsz,0,sizeof(TCHAR)*(*destsz-oldsz));
     *dest = dest1;
   }
 
@@ -610,7 +611,7 @@ EXTERNC int memcpyarm(void **dest, size_t *destsz, size_t *destlen, const TCHAR 
     rv=armreallocsafe((TCHAR**)dest, destsz, destlen1+slen, destlen ? ARMSTRATEGY_INCREASE : ARMSTRATEGY_REDUCE, 0, THETITLE);
     if (*dest) {
       if (slen) {
-        memcpy((char*)*dest+destlen1,source,slen);
+        memcpy(((TCHAR*)*dest+destlen1),source,sizeof(TCHAR)*slen);
         destlen1 += slen;
       }
       if (destlen) *destlen=destlen1;
@@ -1008,6 +1009,14 @@ EXTERNC int MessageBoxFree(HWND hWnd,TCHAR *lpText,LPCTSTR lpCaption,UINT uType)
   return(rv);
 }
 
+EXTERNC int MessageBoxFreeA(HWND hWnd,CHAR *lpText,LPSTR lpCaption,UINT uType) {
+  int rv=MessageBoxA(hWnd,lpText?lpText : "a memory problem occured",lpCaption,uType);
+  if (lpText)
+	  freesafe(lpText, _T("MessageBoxFree"));
+
+  return(rv);
+}
+
 #if NPPDEBUG
 EXTERNC void testfree(int tofree, TCHAR *res, TCHAR *realstring, size_t rv) {
   if (res) {
@@ -1211,8 +1220,8 @@ EXTERNC void memcqspnstart(const TCHAR *find, unsigned findl, unsigned *quick) {
 	unsigned q;
 	for (q = 0; q < 256 / (sizeof(unsigned) * 8); q++)
 		quick[q] = 0; // how many bits can we store in unsigned?
-	while (findl) {
-		quick[(unsigned)*(unsigned char *)find / (sizeof(unsigned) * 8)] |= 1 << (unsigned)*(unsigned char *)find % (sizeof(unsigned) * 8);
+	while (findl>0) {
+		quick[((unsigned)*find) / (sizeof(unsigned) * 8)] |= 1 << ((unsigned)*find) % (sizeof(unsigned) * 8);
 		find++;
 		findl--;
 	}
@@ -1244,6 +1253,18 @@ EXTERNC TCHAR *memcqspn(const TCHAR *buf, const TCHAR *end, const unsigned *quic
 			return((TCHAR*)buf);
 	}
 	return((TCHAR*)end);
+}
+
+EXTERNC CHAR *memcqspnA(const CHAR *buf, const CHAR *end, const unsigned *quick) {
+	if (buf < end) for (; buf < end; buf++) {
+		if (quick[(unsigned)*(unsigned char *)buf / (sizeof(unsigned) * 8)] & 1 << ((unsigned)*(unsigned char *)buf % (sizeof(unsigned) * 8)))
+			return((CHAR*)buf);
+	}
+	else if (buf > end) for (; buf > end; buf--) {
+		if (quick[(unsigned)*(unsigned char *)buf / (sizeof(unsigned) * 8)] & 1 << ((unsigned)*(unsigned char *)buf % (sizeof(unsigned) * 8)))
+			return((CHAR*)buf);
+	}
+	return((CHAR*)end);
 }
 
 EXTERNC TCHAR *memqspn(const TCHAR *buf, const TCHAR *end, const unsigned *quick) {
@@ -1309,6 +1330,50 @@ EXTERNC TCHAR *memcspn(const TCHAR *ibuf, const TCHAR *iend, const TCHAR *ifind,
 			for (; buf < end; buf++) {
 				if (*buf >= min && *buf <= max && (*buf & and_mask) == and_mask && (*buf | or_mask) && wmemchr(find, *buf, findl))
 					return((TCHAR *)buf);
+			}
+		} break;
+	}
+
+	return(end);
+}
+
+EXTERNC CHAR *memcspnA(const CHAR *ibuf, const CHAR *iend, const CHAR *ifind, unsigned findl) {
+	const CHAR *find = ifind;
+	CHAR *buf = (CHAR *)ibuf, *end = (CHAR *)iend;
+	unsigned char c1, c2;
+
+	switch (findl) {
+	case 0:
+		break;
+	case 1:
+		if (buf < end) {
+			CHAR *rv;
+			if ((rv = (CHAR *)memchr(buf, *find, end - buf)))
+				return(rv);
+		}
+		break;
+	case 2:
+		c1 = find[0];
+		c2 = find[1];
+		for (; buf < end; buf++)
+			if (*buf == c1 || *buf == c2)
+				return(buf);
+		break;
+	default:
+		if (buf < end) {
+			const CHAR *findt, *finde = find + sizeof(CHAR)*(findl);
+			unsigned char min = (unsigned char)-1, max = 0, and_mask = (unsigned char)~0, or_mask = 0;
+			for (findt = find; findt < finde; findt++) {
+				if (max < *findt)
+					max = *findt;
+				if (min > *findt)
+					min = *findt;
+				and_mask &= *findt;
+				or_mask |= *findt;
+			}
+			for (; buf < end; buf++) {
+				if (*buf >= min && *buf <= max && (*buf & and_mask) == and_mask && (*buf | or_mask) && memchr(find, *buf, findl))
+					return((CHAR *)buf);
 			}
 		} break;
 	}
@@ -2154,6 +2219,60 @@ failbreak:
 #undef lold
 }
 
+EXTERNC unsigned strchrstransA(CHAR **dest, size_t *destsz, size_t *destlen, CHAR **stopeol, const CHAR *chrs, unsigned chrsl, const CHAR *repls) {
+#define lold 1
+  unsigned n=0,lnew;
+  CHAR *d,*newst,*dnew,*end;
+  CHAR ckst[3];
+  unsigned quick[256/(sizeof(unsigned)*8)];
+
+  if ((d=*dest) && lold && chrsl) {
+    end=d+*destlen;
+    if (stopeol) end=memcspnA(d=*stopeol,end,"\r\n",2);
+    ckst[0]=*repls;
+    ckst[2]='\0';
+    memcqspnstartA(chrs,chrsl,quick);
+    while ( (d=memcqspnA(d,end,quick))<end) {
+      ckst[1]=*d;
+      if (!(newst=(CHAR *)strstr(repls,ckst))) {
+#if NPPDEBUG /* { */
+		  CHAR buffer[100]={0};
+		  sprintf(buffer,"strchrstrans: Improper String Format (#%d)\r\n%s", 1, repls);
+		  MessageBoxFreeA(g_nppData._nppHandle, buffer, PLUGIN_NAME, MB_OK|MB_ICONSTOP);
+#endif /* } */
+        goto failbreak;
+      }
+      newst+=2;
+      if (!(dnew= strchr(newst,*repls))) { // find the termination character (typically ;)
+#if NPPDEBUG /* { */
+		  CHAR buffer[100]={0};
+		  sprintf(buffer,"strchrstrans: Improper String Format (#%d)\r\n%s", 2, repls);
+		  MessageBoxFreeA(g_nppData._nppHandle, buffer,PLUGIN_NAME, MB_OK|MB_ICONSTOP);
+#endif /* } */
+        goto failbreak;
+      }
+      lnew=dnew-newst;
+      if (lnew != lold) {
+        unsigned dx;
+        dx=memmovearmtestA((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+		if (!*dest)
+			goto failbreak;
+        d+=dx; // thanks to stopeol we can't use the easier method here
+        end+=dx+lnew-lold;
+      }
+      if (lnew) {
+        memcpy(d,newst,lnew);
+        d+=lnew;
+      }
+      n++;
+    }
+    if (stopeol) *stopeol = d;
+  }
+failbreak:
+  return(n);
+#undef lold
+}
+
 // For each line:
 // adds begin to the start, replaces strings in the middle, then adds end on the end
 // the spaces in the first line are counted to produce an indent for remaining lines
@@ -2386,27 +2505,44 @@ EXTERNC unsigned encodeURIcomponent(TCHAR **dest, size_t *destsz, size_t *destle
   TCHAR* ddd;
   TCHAR *end;
   TCHAR newst[4];
-  unsigned quick[256/(sizeof(unsigned)*8)];
+  unsigned quick[256/(sizeof(unsigned)*8)]={0};
 #define lold 1
-#define lnew (sizeof(newst)-1)
+//#define lnew (sizeof(newst)-1)
+#define lnew (lstrlen(newst))
 
   if ((ddd=*dest) && lold) {
     TCHAR* newdest = NULL;
 	TCHAR *newlast=*dest;
 	size_t newsz = *destsz * 2, newlen = 0; // only used for HighPerformance
-	for(end=ddd+*destlen,memcqspnstart(g_ENCODEURISTR,sizeof(g_ENCODEURISTR)-1,quick); (ddd=memqspn(ddd,end,quick))<end;) {
-      snprintfX(newst, 4, L"%%%2.2X",*/*(unsigned char *)*/ddd);
+	for(end=ddd+*destlen,memcqspnstart(g_ENCODEURISTR,lstrlen(g_ENCODEURISTR),quick); (ddd=memqspn(ddd,end,quick))<end;) {
+      snprintfX(newst, 4, L"%%%2.2X",/*(unsigned char *)*/(unsigned)*ddd);
+
+	  //::MessageBox(NULL, newst, TEXT(""), MB_OK);
+
       if (HighPerformanceon || HighPerformance) {
         if (newlast<ddd) {
+			auto newnewlen=newlen;
 			memcpyarmsafe((void**)&newdest, &newsz, &newlen, newlast, ddd-newlast, _T("encodeURIcomponent"));
 			if (!newdest)
 				goto freebreak;
+
+			//TCHAR buffer[100]={0};
+			//wsprintf(buffer,TEXT("COPY  %d %d %s"), newnewlen, newlen, newdest);
+			//::MessageBox(NULL, buffer, TEXT(""), MB_OK);
 		}
         newlast=(ddd+=lold);
-        armreallocsafe(&newdest, &newsz, CHARSIZE(newlen + lnew + 1) /* 1 provides space for \0 below*/,
+        armreallocsafe(&newdest, &newsz, (newlen + lnew + 1) /* 1 provides space for \0 below*/,
 			ARMSTRATEGY_INCREASE, 0, _T("encodeURIcomponent"));
 		if (!newdest) goto freebreak;
-        memcpy(newdest+newlen,newst,lnew);
+        memcpy(newdest+newlen,newst,sizeof(TCHAR)*lnew);
+
+		//TCHAR buffer[100]={0};
+		//wsprintf(buffer,TEXT("%s %d :: %s"), newst, lnew, newdest);
+		//::MessageBox(NULL, buffer, TEXT(""), MB_OK);
+
+		//wsprintf(buffer,TEXT("%d==%d"), newlen, newdest);
+		//::MessageBox(NULL, buffer, TEXT(""), MB_OK);
+
         newlen+=lnew;
         //end=*dest+*destlen;
       } else {
@@ -2415,7 +2551,7 @@ EXTERNC unsigned encodeURIcomponent(TCHAR **dest, size_t *destsz, size_t *destle
           end=*dest+*destlen;
         }
         if (lnew) {
-          memcpy(ddd,newst,lnew);
+          memcpy(ddd,newst,sizeof(TCHAR)*lnew);
           ddd+=lnew;
         }
       }
@@ -2448,13 +2584,14 @@ EXTERNC unsigned encodeURIcomponentA(CHAR **dest, size_t *destsz, size_t *destle
 	CHAR newst[4];
 	unsigned quick[256/(sizeof(unsigned)*8)];
 #define lold 1
-#define lnew (sizeof(newst)-1)
+#define lnew (strlen(newst))
+//#define lnew (sizeof(newst)-1)
 
 	if ((ddd=*dest) && lold) {
 		CHAR* newdest = NULL;
 		CHAR *newlast=*dest;
 		size_t newsz = *destsz * 2, newlen = 0; // only used for HighPerformance
-		for(end=ddd+*destlen,memcqspnstartA(g_ENCODEURISTR1,sizeof(g_ENCODEURISTR1)-1,quick); (ddd=memqspnA(ddd,end,quick))<end;) {
+		for(end=ddd+*destlen,memcqspnstartA(g_ENCODEURISTR1,strlen(g_ENCODEURISTR1),quick); (ddd=memqspnA(ddd,end,quick))<end;) {
 			//snprintfX(newst, 4, L"%%%2.2X",*(unsigned char *)d);
 			sprintf(newst, "%%%2.2X",*(unsigned char *)ddd);
 
@@ -5382,6 +5519,7 @@ EXTERNC BOOL bracematch(INT_CURRENTEDIT, unsigned *curpos1, unsigned *matchpos1,
 #define CAFLAG_DENYBINARY					0x200 /* User is not permitted to select any text with \0 in it */
 #define CAFLAG_USEUNICODE					0x400 /* Use the UNICODE version of this function if in the right mode */
 #define CAFLAG_UNICODENTONLY				0x800 /* Unicode is automatically blocked if not in NT */
+#define CAFLAG_CHARISNREADOFTCHAR			0x1000 /* Unicode is automatically blocked if not in NT */
 #define IsScintillaUnicode(currentEdit) (SENDMSGTOCED(currentEdit, SCI_GETCODEPAGE, 0, 0)==SC_CP_UTF8)
 
 #define CONVERTALL_CMD_memlowercase			'1'
@@ -5593,6 +5731,8 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 
 		bool YEAH=0;
 
+		bool ParmsStr = flags&CAFLAG_CHARISNREADOFTCHAR!=0;
+
 		//MessageBoxFree(g_nppData._nppHandle,smprintf("#2 textBufferLength:%u txszW:%u txW:%p",textBufferLength,txszW,txW),PLUGIN_NAME, MB_OK|MB_ICONSTOP);
 		//MessageBoxFree(g_nppData._nppHandle,smprintf("%sUsing Unicode",(flags&CAFLAG_USEUNICODE)?"":"Not "),PLUGIN_NAME, MB_OK|MB_ICONSTOP);
 		SENDMSGTOCED(currentEdit, SCI_SETCURSOR, SC_CURSORWAIT, 0);
@@ -5633,8 +5773,15 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 				rv += memstrtran(&txUnicode, &allocatedTextBufferSize, &textBufferLength, NULL, s3, wcslen(s3), s4, wcslen(s4));
 			break;
 		case CONVERTALL_CMD_strchrstrans:
-			rv = strchrstrans(&txUnicode, &allocatedTextBufferSize, &textBufferLength, NULL, s1, wcslen(s1), s2);
+		{
+			if(0) {
+				rv = strchrstransA(&txUCS2, &allocatedTextBufferSize, &textBufferLength, NULL, (CHAR*)s1, strlen((CHAR*)s1), (CHAR*)s2);
+				YEAH=1;
+			} else {
+				rv = strchrstrans(&txUnicode, &allocatedTextBufferSize, &textBufferLength, NULL, s1, wcslen(s1), s2);
+			}
 			break;
+		}
 		case CONVERTALL_CMD_prepostpendlines:
 			rv = prepostpendlines(&txUnicode, &allocatedTextBufferSize, &textBufferLength, *s3 == 's' ? 0 : 1, s1, wcslen(s1), s2, wcslen(s2), s3 + 1, wcslen(s3 + 1), s4, wcslen(s4));
 			break;
@@ -5857,7 +6004,7 @@ EXTERNC PFUNCPLUGINCMD pfconvertlowercase(void)		{ convertall(CONVERTALL_CMD_mem
 EXTERNC PFUNCPLUGINCMD pfconvertpropercase(void)	{ convertall(CONVERTALL_CMD_mempropercase, CAFLAG_USEUNICODE, NULL, NULL, NULL, NULL); }
 EXTERNC PFUNCPLUGINCMD pfconvertsentencecase(void)	{ convertall(CONVERTALL_CMD_memsentencecase, CAFLAG_USEUNICODE, NULL, NULL, NULL, NULL); }
 EXTERNC PFUNCPLUGINCMD pfconvertinvertcase(void)	{ convertall(CONVERTALL_CMD_meminvertcase, CAFLAG_USEUNICODE, NULL, NULL, NULL, NULL); }
-EXTERNC PFUNCPLUGINCMD pfencodeHTML(void)			{ convertall(CONVERTALL_CMD_strchrstrans, CAFLAG_DENYBLOCK, _T("&<>\""), _T(",&&amp;,<&lt;,>&gt;,\"&quot;,"), NULL, NULL); }
+EXTERNC PFUNCPLUGINCMD pfencodeHTML(void)			{ convertall(CONVERTALL_CMD_strchrstrans, CAFLAG_DENYBLOCK|CAFLAG_CHARISNREADOFTCHAR, (TCHAR*)("&<>\""), (TCHAR*)(",&&amp;,<&lt;,>&gt;,\"&quot;,"), NULL, NULL); }
 EXTERNC PFUNCPLUGINCMD pfencodeURIcomponent(void)	{ convertall(CONVERTALL_CMD_encodeURIcomponent, CAFLAG_DENYBLOCK, NULL, NULL, NULL, NULL); }
 EXTERNC PFUNCPLUGINCMD pfrot13(void)				{ convertall(CONVERTALL_CMD_memchrtran, 0, _T("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"), _T("NOPQRSTUVWXYZABCDEFGHIJKLMnopqrstuvwxyzabcdefghijklm"), NULL, NULL); }
 EXTERNC PFUNCPLUGINCMD pfunwraptext(void)			{ convertall(CONVERTALL_CMD_rewraptexttest, CAFLAG_DENYBLOCK, NULL, NULL, NULL, NULL); }
