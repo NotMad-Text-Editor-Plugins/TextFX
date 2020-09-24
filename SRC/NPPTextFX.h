@@ -100,7 +100,33 @@ EXTERNC int armrealloc(TCHAR **dest, size_t *destsz, size_t newsize, int strateg
 #endif
 );
 
+EXTERNC int armreallocA(CHAR **dest, size_t *destsz, size_t newsize, int strategy, int clear
+#undef THETITLE
+#if NPPDEBUG
+, TCHAR *title
+#define armreallocsafeA armreallocA
+#define THETITLE title
+#else
+#define armreallocsafeA(dt,ds,ns,st,cl,ti) armreallocA(dt,ds,ns,st,cl)
+#define THETITLE "armrealloc" /* the macros discards this */
+#endif
+);
+
 EXTERNC int strncpyarm(TCHAR **dest,size_t *destsz,size_t *destlen,const TCHAR *source,size_t maxlen
+#undef THETITLE
+#if NPPDEBUG
+, TCHAR *title
+#define strncpyarmsafe strncpyarm
+#define strcpyarmsafe(buf,bufsz,bufl,scsrc,ti) strncpyarm(buf,bufsz,bufl,scsrc,(unsigned)-1,ti)
+#define THETITLE title
+#else
+#define strncpyarmsafe(dt,ds,dl,st,ml,ti) strncpyarm(dt,ds,dl,st,ml)
+#define strcpyarmsafe(buf,bufsz,bufl,scsrc,ti) strncpyarm(buf,bufsz,bufl,scsrc,(unsigned)-1)
+#define THETITLE "strncpyarm" /* the macros discards this */
+#endif
+);
+
+EXTERNC int strncpyarmA(CHAR **dest,size_t *destsz,size_t *destlen,const CHAR *source,size_t maxlen
 #undef THETITLE
 #if NPPDEBUG
 , TCHAR *title
@@ -123,6 +149,18 @@ EXTERNC int memcpyarm(void **dest,size_t *destsz,size_t *destlen,const TCHAR *so
 #else
 #define memcpyarmsafe(dt,ds,dl,st,ml,ti) memcpyarm(dt,ds,dl,st,ml)
 #define THETITLE "memcpyarm" /* the macros discards this */
+#endif
+);
+
+EXTERNC int memcpyarmA(void **dest,size_t *destsz,size_t *destlen,const CHAR *source,size_t slen
+#undef THETITLE
+#if NPPDEBUG
+, TCHAR *title
+#define memcpyarmsafeA memcpyarmA
+#define THETITLE title
+#else
+#define memcpyarmsafeA(dt,ds,dl,st,ml,ti) memcpyarmA(dt,ds,dl,st,ml)
+#define THETITLE "memcpyarmA" /* the macros discards this */
 #endif
 );
 
@@ -151,6 +189,10 @@ EXTERNC int memmovearm(void **dest, size_t *destsz, size_t *destlen, TCHAR *dest
 #if NPPDEBUG
 ,int notest
 #endif
+);EXTERNC int memmovearmA(void **dest, size_t *destsz, size_t *destlen, CHAR *destp, CHAR *sourcep
+#if NPPDEBUG
+,int notest
+#endif
 );
 
 #if NPPDEBUG
@@ -160,15 +202,17 @@ EXTERNC int memmovearm(void **dest, size_t *destsz, size_t *destlen, TCHAR *dest
 #endif
 
 EXTERNC void memcqspnstart(const TCHAR *find, unsigned findl, unsigned *quick);
+EXTERNC void memcqspnstartA(const CHAR *find, unsigned findl, unsigned *quick);
 EXTERNC TCHAR *memcqspn(const TCHAR *buf, const TCHAR *end, const unsigned *quick);
 EXTERNC TCHAR *memqspn(const TCHAR *buf, const TCHAR *end, const unsigned *quick);
+EXTERNC CHAR *memqspnA(const CHAR *buf, const CHAR *end, const unsigned *quick);
 EXTERNC TCHAR *memcspn(const TCHAR *buf, const TCHAR *end, const TCHAR *find, unsigned findl);
 EXTERNC char *memcspn_chr(const char *buf, const char *end, const char *find, unsigned findl);
 EXTERNC TCHAR *memspn(const TCHAR *buf, const TCHAR *end, const TCHAR *find, unsigned findl);
 EXTERNC TCHAR *memstr(const TCHAR *buf, const TCHAR *end, const TCHAR *find, unsigned findl);
 EXTERNC TCHAR *memchrX(const TCHAR *buf, const TCHAR *end, unsigned find);
 EXTERNC TCHAR *strncpymem(TCHAR *szDest, size_t uDestSz, const TCHAR *sSource, unsigned uSourceLen);
-#define strncpy strncpy_unsafe
+//#define strncpy strncpy_unsafe
 TCHAR *strtokX(TCHAR *szStr, unsigned *puPos, const TCHAR *szDeli);
 #define strtok strtok_unsafe
 EXTERNC unsigned powcheck(unsigned num);

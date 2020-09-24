@@ -286,8 +286,8 @@ EXTERNC void mallocsafedone(void) {
 #define mallocsafe(ct,ti) reallocsafeX(NULL,ct,ti,1)
 #define reallocsafe(bf,ct,ti) reallocsafeX(bf,ct,ti,0)
 #define reallocsafeNULL(bf,ct,ti) reallocsafeX(bf,ct,ti,1)
-#define malloc malloc_unsafe
-#define realloc realloc_unsafe
+//#define malloc malloc_unsafe
+//#define realloc realloc_unsafe
 #define calloc calloc_unsafe /* I never use calloc() but just in case someone tries */
 #define free free_unsafe
 #define strdup strdup_unsafe
@@ -441,6 +441,50 @@ doit:
 }
 #undef THETITLE
 
+// If choosing ARMSTRATEGY_REDUCE for a new buffer it is usually better to just use malloc() yourself and not call armrealloc()
+// clear=1, memset new space to 0
+//size_t g_armrealloc_cutoff=16384; /* sizeof(buf)<=, next size doubled, >, added */
+// new feature: ARMSTRATEGY_REDUCE should only reduce when half can be reclaimed, much like ARMSTRATEGY_INCREASE only doubles when necessary
+EXTERNC int armreallocA(CHAR **dest, size_t *destsz, size_t newsize, int strategy, int clear
+#if NPPDEBUG
+,TCHAR *title
+#define armreallocsafeA armreallocA
+#define THETITLE title
+#else
+#define armreallocsafeA(dt,ds,ns,st,cl,ti) armreallocA(dt,ds,ns,st,cl)
+#define THETITLE "armrealloc" /* the macros discards this */
+#endif
+) {
+	unsigned rv=0, oldsz= (*dest) ? (*destsz) : 0;
+	CHAR *dest1;
+
+	if (strategy==ARMSTRATEGY_REDUCE && *destsz != newsize) {
+		*destsz = newsize;
+		goto doit; // without this goto, the conditionals were so convoluted that they never worked
+	}
+	if (strategy==ARMSTRATEGY_INCREASE){
+		if (newsize < 64)
+			newsize=64;
+		if (!*dest && newsize < *destsz)
+			newsize=*destsz;
+	}
+	if (!*dest || *destsz <  newsize) {
+		*destsz = (strategy==ARMSTRATEGY_INCREASE) ? roundtonextpower(newsize) : newsize;
+	doit:
+		dest1=*dest;
+		//dest1= (dest1) ? (CHAR *)realloc(dest1, *destsz) : (CHAR *)malloc(*destsz);
+		dest1= (dest1) ? (CHAR *)reallocsafe(dest1, *destsz, THETITLE) : (CHAR *)mallocsafe(*destsz, THETITLE);
+		//if (dest1) strcpy((dest1+*destsz-1),"#$"); // $ is beyond string
+		rv = dest1 - *dest;
+		if (dest1 && clear && *destsz>oldsz)
+			memset((char*)dest1+oldsz,0,*destsz-oldsz);
+		*dest = dest1;
+	}
+
+	return(rv);
+}
+#undef THETITLE
+
 /* strcpyarm() append-realloc-malloc; This function is designed to
    continually add onto the end of a string. It copies source to *dest+*destlen
    and *destlen += strlen(source). If the new data including \0 would exceed *destsz, the buffer is realloc()'d
@@ -504,6 +548,45 @@ EXTERNC int strncpyarm(TCHAR **dest, size_t *destsz, size_t *destlen, const TCHA
 }
 #undef THETITLE
 
+EXTERNC int strncpyarmA(CHAR **dest, size_t *destsz, size_t *destlen, const CHAR *source, size_t maxlen
+#if NPPDEBUG
+, TCHAR *title
+#define strncpyarmsafeA strncpyarmA
+#define strcpyarmsafeA(buf,bufsz,bufl,scsrc,ti) strncpyarmA(buf,bufsz,bufl,scsrc,(unsigned)-1,ti)
+#define THETITLE title
+#else
+#define strncpyarmsafe(dt,ds,dl,st,ml,ti) strncpyarm(dt,ds,dl,st,ml)
+#define strcpyarmsafe(buf,bufsz,bufl,scsrc,ti) strncpyarm(buf,bufsz,bufl,scsrc,(unsigned)-1)
+#define THETITLE "strncpyarm" /* the macros discards this */
+#endif
+) {
+  size_t destlen1,slen;
+  int rv=0;
+  if (source) { // maxlen==0 is perfectly valid
+    slen = strlen(source);
+    if (slen > maxlen)
+		slen = maxlen;
+    destlen1 = (*dest && destlen) ? *destlen : 0;
+    if (*dest && !destlen1 && *destsz!=slen+1) {
+      freesafe(*dest, THETITLE);
+      *dest=NULL;
+      *destsz=slen+1;
+    }
+	rv = armreallocsafeA(dest, destsz, sizeof(char)*(destlen1 + slen + 1), destlen ? ARMSTRATEGY_INCREASE : ARMSTRATEGY_REDUCE, 0, THETITLE);
+    if (*dest) {
+      if (slen) {
+        memcpy(*dest+destlen1, source, sizeof(char)*(slen));
+        destlen1 += slen;
+      }
+      *(*dest+destlen1)='\0';
+      if (destlen)
+		  *destlen=destlen1;
+    }
+  }
+  return(rv);
+}
+#undef THETITLE
+
 EXTERNC int memcpyarm(void **dest, size_t *destsz, size_t *destlen, const TCHAR *source, size_t slen
 #if NPPDEBUG
 , TCHAR *title
@@ -525,6 +608,39 @@ EXTERNC int memcpyarm(void **dest, size_t *destsz, size_t *destlen, const TCHAR 
       *destsz=slen;
     }
     rv=armreallocsafe((TCHAR**)dest, destsz, destlen1+slen, destlen ? ARMSTRATEGY_INCREASE : ARMSTRATEGY_REDUCE, 0, THETITLE);
+    if (*dest) {
+      if (slen) {
+        memcpy((char*)*dest+destlen1,source,slen);
+        destlen1 += slen;
+      }
+      if (destlen) *destlen=destlen1;
+    }
+  }
+  return(rv);
+}
+#undef THETITLE
+
+EXTERNC int memcpyarmA(void **dest, size_t *destsz, size_t *destlen, const CHAR *source, size_t slen
+#if NPPDEBUG
+, TCHAR *title
+#define memcpyarmsafeA memcpyarmA
+#define THETITLE title
+#else
+#define memcpyarmsafeA(dt,ds,dl,st,ml,ti) memcpyarmA(dt,ds,dl,st,ml)
+#define THETITLE "memcpyarmA" /* the macros discards this */
+#endif
+) {
+  size_t destlen1;
+  int rv=0;
+  if (slen == (unsigned)-1) slen= strlen(source);
+  if (source) { // slen=0 must at least allocate memory
+    destlen1=(*dest && destlen)?*destlen:0;
+    if (*dest && !destlen1 && *destsz!=slen) {
+      freesafe(*dest, (TCHAR*)THETITLE);
+      *dest=NULL;
+      *destsz=slen;
+    }
+    rv=armreallocsafeA((CHAR**)dest, destsz, destlen1+slen, destlen ? ARMSTRATEGY_INCREASE : ARMSTRATEGY_REDUCE, 0, THETITLE);
     if (*dest) {
       if (slen) {
         memcpy((char*)*dest+destlen1,source,slen);
@@ -993,6 +1109,27 @@ EXTERNC void *memmovetest(TCHAR *dest, TCHAR *src, size_t n) {
 #define memmovetest(dest, src, n) wmemmove((dest), (src), n)
 #endif /* } */
 
+// When enabled, this will ensure that string lengths are being maintained properly by the highly detailed
+// string transforms. When they are known to be working, turning off NPPDEBUG will disable all this
+// slow code.
+#if NPPDEBUG && 1 /* { binary safe functions no longer permit this testing */
+EXTERNC void *memmovetestA(CHAR *dest, CHAR *src, size_t n) {
+	size_t m;
+	m = strlen(src);
+	if (m + 1 != n) {
+#if NPPWINDOWS /* { */
+		MessageBoxFree(g_nppData._nppHandle, smprintf("memmovetest wrong SLN strlen(+1):%u != SLN:%u", strlen((const char *)src) + 1, n), PLUGIN_NAME, MB_OK | MB_ICONSTOP);
+#else /* } else { */ /* Borland C for DOS */
+		printf("Wrong SLN:%u != strlen(+1):%d\n", n, m + 1);
+#endif /* } */
+		n = m;
+	}
+	return(memmove(dest, src, n));
+}
+#else /* } else { */
+#define memmovetest(dest, src, n) wmemmove((dest), (src), n)
+#endif /* } */
+
 // unlike other arm routines, destlen is required here because memmovearm() is not interested in appending anything.
 // returns the number of bytes *dest was changed by during a realloc() so the caller can adjust their pointers
 // memmovearm always moves one extra byte assuming the caller is trying to maintain a \0 terminated C-string
@@ -1026,11 +1163,62 @@ EXTERNC int memmovearm(void **dest, size_t *destsz, size_t *destlen, TCHAR *dest
 #define memmovearmtest(dt,ds,dl,dp,sp,nt) memmovearm(dt,ds,dl,dp,sp)
 #endif
 
+// unlike other arm routines, destlen is required here because memmovearm() is not interested in appending anything.
+// returns the number of bytes *dest was changed by during a realloc() so the caller can adjust their pointers
+// memmovearm always moves one extra byte assuming the caller is trying to maintain a \0 terminated C-string
+EXTERNC int memmovearmA(void **dest, size_t *destsz, size_t *destlen, CHAR *destp, CHAR *sourcep
+#if NPPDEBUG
+	, int notest
+#endif
+) {
+	unsigned rv = 0;
+	if (destp != sourcep) {
+		if ((rv = armreallocsafeA((CHAR**)dest, destsz, *destlen + 1 + destp - sourcep, ARMSTRATEGY_INCREASE, 0, TEXT("memmovearm")))) {
+			destp += rv;
+			sourcep += rv;
+		}
+		if (*dest) {
+			//memset(*dest+*destlen,'@',*destsz-*destlen); *(*dest+*destlen)='%'; // % is \0
+#if NPPDEBUG
+			if (notest)
+				memmove(destp, sourcep, (*destlen) - (sourcep - *dest) + 1);
+			else
+#endif
+				memmovetestA(destp, sourcep, (*destlen) - (sourcep - *dest) + 1);
+			*destlen += destp - sourcep;
+		}
+	}
+	return(rv);
+}
+
+#if NPPDEBUG
+#define memmovearmtest memmovearm
+#else
+#define memmovearmtest(dt,ds,dl,dp,sp,nt) memmovearm(dt,ds,dl,dp,sp)
+#endif
+
+#if NPPDEBUG
+#define memmovearmtestA memmovearmA
+#else
+#define memmovearmtestA(dt,ds,dl,dp,sp,nt) memmovearmA(dt,ds,dl,dp,sp)
+#endif
+
 // because so many c string functions must call strlen() before operating, these mem...
 // functions are more efficient on huge buffers. If you wish to provide a \0 terminated C-string
 // calculate the strlen() yourself as most c string functions do every time they
 // are called.
 EXTERNC void memcqspnstart(const TCHAR *find, unsigned findl, unsigned *quick) {
+	unsigned q;
+	for (q = 0; q < 256 / (sizeof(unsigned) * 8); q++)
+		quick[q] = 0; // how many bits can we store in unsigned?
+	while (findl) {
+		quick[(unsigned)*(unsigned char *)find / (sizeof(unsigned) * 8)] |= 1 << (unsigned)*(unsigned char *)find % (sizeof(unsigned) * 8);
+		find++;
+		findl--;
+	}
+}
+
+EXTERNC void memcqspnstartA(const CHAR *find, unsigned findl, unsigned *quick) {
 	unsigned q;
 	for (q = 0; q < 256 / (sizeof(unsigned) * 8); q++)
 		quick[q] = 0; // how many bits can we store in unsigned?
@@ -1068,6 +1256,18 @@ EXTERNC TCHAR *memqspn(const TCHAR *buf, const TCHAR *end, const unsigned *quick
 			return((TCHAR*)buf);
 	}
 	return((TCHAR*)end);
+}
+
+EXTERNC CHAR *memqspnA(const CHAR *buf, const CHAR *end, const unsigned *quick) {
+	if (buf < end) for (; buf < end; buf++) {
+		if (!(quick[(unsigned)*(unsigned char *)buf / (sizeof(unsigned) * 8)] & 1 << ((unsigned)*(unsigned char *)buf % (sizeof(unsigned) * 8))))
+			return((CHAR*)buf);
+	}
+	else if (buf > end) for (; buf > end; buf--) {
+		if (!(quick[(unsigned)*(unsigned char *)buf / (sizeof(unsigned) * 8)] & 1 << ((unsigned)*(unsigned char *)buf % (sizeof(unsigned) * 8))))
+			return((CHAR*)buf);
+	}
+	return((CHAR*)end);
 }
 
 // strcspn: returns the first location in buf of any character in find
@@ -1270,7 +1470,7 @@ EXTERNC TCHAR *memstr(const TCHAR *buf, const TCHAR *end, const TCHAR *find, uns
 // at the end of a string. This is an unfortunate definition because though this
 // is a valuable use for strncpy(), such a feature is almost never used intentionally.
 // #define strncpy(dest,src,len) strncpymem(dest,len,src,(unsigned)-1)
-#define strncpy strncpy_unsafe
+//#define strncpy strncpy_unsafe
 EXTERNC TCHAR *strncpymem(TCHAR *szDest,size_t uDestSz,const TCHAR *sSource,unsigned uSourceLen) {
   if (szDest && uDestSz) {
     if (sSource) {
@@ -2177,31 +2377,32 @@ EXTERNC unsigned rewraptexttest(TCHAR **dest, size_t *destsz, size_t *destlen, u
 #endif
 
 const TCHAR g_ENCODEURISTR[] = _T("!'()*-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~");
+const CHAR g_ENCODEURISTR1[] = ("!'()*-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~");
 // Same function as JavaScript's encodeURIcomponent()
 // component refers to the fact that this is not expected to encode a complete URL,
 // only a component of it
 EXTERNC unsigned encodeURIcomponent(TCHAR **dest, size_t *destsz, size_t *destlen) {
   unsigned n=0;
-  TCHAR* d;
+  TCHAR* ddd;
   TCHAR *end;
   TCHAR newst[4];
   unsigned quick[256/(sizeof(unsigned)*8)];
 #define lold 1
 #define lnew (sizeof(newst)-1)
 
-  if ((d=*dest) && lold) {
+  if ((ddd=*dest) && lold) {
     TCHAR* newdest = NULL;
 	TCHAR *newlast=*dest;
 	size_t newsz = *destsz * 2, newlen = 0; // only used for HighPerformance
-	for(end=d+*destlen,memcqspnstart(g_ENCODEURISTR,sizeof(g_ENCODEURISTR)-1,quick); (d=memqspn(d,end,quick))<end;) {
-      snprintfX(newst, 4, L"%%%2.2X",*(unsigned char *)d);
+	for(end=ddd+*destlen,memcqspnstart(g_ENCODEURISTR,sizeof(g_ENCODEURISTR)-1,quick); (ddd=memqspn(ddd,end,quick))<end;) {
+      snprintfX(newst, 4, L"%%%2.2X",*/*(unsigned char *)*/ddd);
       if (HighPerformanceon || HighPerformance) {
-        if (newlast<d) {
-			memcpyarmsafe((void**)&newdest, &newsz, &newlen, newlast, d-newlast, _T("encodeURIcomponent"));
+        if (newlast<ddd) {
+			memcpyarmsafe((void**)&newdest, &newsz, &newlen, newlast, ddd-newlast, _T("encodeURIcomponent"));
 			if (!newdest)
 				goto freebreak;
 		}
-        newlast=(d+=lold);
+        newlast=(ddd+=lold);
         armreallocsafe(&newdest, &newsz, CHARSIZE(newlen + lnew + 1) /* 1 provides space for \0 below*/,
 			ARMSTRATEGY_INCREASE, 0, _T("encodeURIcomponent"));
 		if (!newdest) goto freebreak;
@@ -2210,20 +2411,20 @@ EXTERNC unsigned encodeURIcomponent(TCHAR **dest, size_t *destsz, size_t *destle
         //end=*dest+*destlen;
       } else {
         if (lnew != lold) {
-          d+=memmovearmtest((void**)dest,destsz,destlen,d+lnew,d+lold,1); if (!*dest) goto failbreak;
+          ddd+=memmovearmtest((void**)dest,destsz,destlen,ddd+lnew,ddd+lold,1); if (!*dest) goto failbreak;
           end=*dest+*destlen;
         }
         if (lnew) {
-          memcpy(d,newst,lnew);
-          d+=lnew;
+          memcpy(ddd,newst,lnew);
+          ddd+=lnew;
         }
       }
       n++;
     }
     if (HighPerformanceon || HighPerformance) {
         if (n) {
-        if (newlast<d)
-			strncpyarmsafe(&newdest, &newsz, &newlen, newlast, d-newlast, _T("encodeURIcomponent"));
+        if (newlast<ddd)
+			strncpyarmsafe(&newdest, &newsz, &newlen, newlast, ddd-newlast, _T("encodeURIcomponent"));
         else
 			newdest[newlen]='\0'; // space provided for up above
 freebreak:
@@ -2236,6 +2437,71 @@ freebreak:
   }
 failbreak:
   return(n);
+#undef lnew
+#undef lold
+}
+
+EXTERNC unsigned encodeURIcomponentA(CHAR **dest, size_t *destsz, size_t *destlen) {
+	unsigned n=0;
+	CHAR* ddd;
+	CHAR *end;
+	CHAR newst[4];
+	unsigned quick[256/(sizeof(unsigned)*8)];
+#define lold 1
+#define lnew (sizeof(newst)-1)
+
+	if ((ddd=*dest) && lold) {
+		CHAR* newdest = NULL;
+		CHAR *newlast=*dest;
+		size_t newsz = *destsz * 2, newlen = 0; // only used for HighPerformance
+		for(end=ddd+*destlen,memcqspnstartA(g_ENCODEURISTR1,sizeof(g_ENCODEURISTR1)-1,quick); (ddd=memqspnA(ddd,end,quick))<end;) {
+			//snprintfX(newst, 4, L"%%%2.2X",*(unsigned char *)d);
+			sprintf(newst, "%%%2.2X",*(unsigned char *)ddd);
+
+			if (HighPerformanceon || HighPerformance) {
+				if (newlast<ddd) {
+					//memcpy(newdest, newlast, ddd-newlast);
+					memcpyarmsafeA((void**)&newdest, &newsz, &newlen, newlast, ddd-newlast, _T("encodeURIcomponent"));
+					if (!newdest)
+						goto freebreak;
+				}
+				newlast=(ddd+=lold);
+				armreallocsafeA(&newdest, &newsz, CHARSIZE(newlen + lnew + 1) /* 1 provides space for \0 below*/,
+					ARMSTRATEGY_INCREASE, 0, _T("encodeURIcomponent"));
+				if (!newdest) goto freebreak;
+				memcpy(newdest+newlen,newst,lnew);
+				newlen+=lnew;
+				//end=*dest+*destlen;
+			} else {
+				if (lnew != lold) {
+					ddd+=memmovearmA((void**)dest,destsz,destlen,ddd+lnew,ddd+lold,1); if (!*dest) goto failbreak;
+					end=*dest+*destlen;
+				}
+				if (lnew) {
+					memcpy(ddd,newst,lnew);
+					ddd+=lnew;
+				}
+			}
+			n++;
+		}
+
+		if (HighPerformanceon || HighPerformance) {
+			if (n) {
+				if (newlast<ddd)
+					strncpyarmsafeA(&newdest, &newsz, &newlen, newlast, ddd-newlast, _T("encodeURIcomponent"));
+					//strncpy(newdest, newlast, ddd-newlast);
+				else
+					newdest[newlen]='\0'; // space provided for up above
+			freebreak:
+				freesafe(*dest, _T("encodeURIcomponent"));
+				if (!(*dest=newdest)) n=0;
+				*destsz=newsz;
+				*destlen=newlen;
+			} else if (newdest) freesafe(newdest, _T("encodeURIcomponent"));
+		}
+	}
+failbreak:
+	return(n);
 #undef lnew
 #undef lold
 }
@@ -5325,6 +5591,8 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 		unsigned sln = UCS2FromUTF8(txUCS2, textBufferLength, txUnicode, allocatedConvertedTextBufferSize, FALSE, NULL);
 		txUnicode[sln] = '\0';
 
+		bool YEAH=0;
+
 		//MessageBoxFree(g_nppData._nppHandle,smprintf("#2 textBufferLength:%u txszW:%u txW:%p",textBufferLength,txszW,txW),PLUGIN_NAME, MB_OK|MB_ICONSTOP);
 		//MessageBoxFree(g_nppData._nppHandle,smprintf("%sUsing Unicode",(flags&CAFLAG_USEUNICODE)?"":"Not "),PLUGIN_NAME, MB_OK|MB_ICONSTOP);
 		SENDMSGTOCED(currentEdit, SCI_SETCURSOR, SC_CURSORWAIT, 0);
@@ -5416,8 +5684,16 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 			rv = numberconvert(&txUnicode, &allocatedTextBufferSize, &textBufferLength, *s1, *s2);
 			break;
 		case CONVERTALL_CMD_encodeURIcomponent:
-			rv = encodeURIcomponent(&txUnicode, &allocatedTextBufferSize, &textBufferLength);
+		{
+#if 0
+				rv = encodeURIcomponent(&txUnicode, &allocatedTextBufferSize, &textBufferLength);
+				::MessageBox(NULL, txUnicode, TEXT(""), MB_OK); return;
+#else
+				rv = encodeURIcomponentA(&txUCS2, &allocatedTextBufferSize, &textBufferLength);
+				YEAH=1;
+#endif
 			break;
+		}
 		case CONVERTALL_CMD_filldown:
 			rv = filldown(&txUnicode, &allocatedTextBufferSize, &textBufferLength, *s1 == 'i' ? 1 : 0);
 			break;
@@ -5468,11 +5744,18 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 #endif
 		} // end switch switch (cmd)
 
-		if (txUnicode) {
-			// Go convert!
-			// UTF-8 --> UCS-2
-			sln = UTF8FromUCS2(txUnicode, allocatedConvertedTextBufferSize, (char*)txUCS2, textBufferLength, FALSE);
-			txUCS2[sln] = '\0';
+		if (txUnicode) 
+		{
+			if(YEAH&&txUCS2)
+			{}
+			else
+			{
+				// Go convert!
+				// UTF-8 --> UCS-2
+				//sln = UTF8FromUCS2(txUnicode, allocatedConvertedTextBufferSize, (char*)txUCS2, textBufferLength, FALSE);
+				sln = UCS2FromUTF8(txUCS2, allocatedConvertedTextBufferSize, txUnicode, textBufferLength, FALSE, 0);
+				txUCS2[sln] = '\0';
+			}
 #if NPPDEBUG
 			if (!(flags&CAFLAG_HASBINARY) && strlen(txUCS2) != textBufferLength)
 				MessageBoxFree(g_nppData._nppHandle,
@@ -5521,7 +5804,9 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 				}
 			} // end if (rv)
 			SENDMSGTOCED(currentEdit, SCI_ENDUNDOACTION, 0, 0);
-		} else {
+		} 
+		else 
+		{
 			MessageBoxFree(g_nppData._nppHandle, smprintf(_T("Out of memory%s"), HighPerformance ? _T(". Try turning off High Performance.") : _T("")),
 				_T(PLUGIN_NAME), MB_OK | MB_ICONSTOP);
 		} // end if (txUCS2)
