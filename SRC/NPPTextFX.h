@@ -186,7 +186,7 @@ EXTERNC size_t sarmprintfpath(TCHAR **dest,size_t *destsz,size_t *destlen,const 
 EXTERNC TCHAR *smprintfpath(const TCHAR *format,...);
 EXTERNC int MessageBoxFree(HWND hWnd,TCHAR *lpText,LPCTSTR lpCaption,UINT uType);
 EXTERNC int MessageBoxFreeA(HWND hWnd,CHAR *lpText,LPSTR lpCaption,UINT uType);
-EXTERNC int memmovearm(void **dest, size_t *destsz, size_t *destlen, TCHAR *destp, TCHAR *sourcep
+EXTERNC int memmovearm(TCHAR **dest, size_t *destsz, size_t *destlen, TCHAR *destp, TCHAR *sourcep
 #if NPPDEBUG
 ,int notest
 #endif
@@ -351,7 +351,3 @@ EXTERNC PFUNCPLUGINCMD pfMarkWordFindForward(void);
 EXTERNC PFUNCPLUGINCMD pfMarkWordFindCaseSensitive(void);
 EXTERNC PFUNCPLUGINCMD pfMarkWordFindWholeWord(void);
 // SUBSECTION: END
-
-
-EXTERNC unsigned encodeURIcomponent(TCHAR **dest, size_t *destsz, size_t *destlen);
-EXTERNC unsigned encodeURIcomponentA(CHAR **dest, size_t *destsz, size_t *destlen);

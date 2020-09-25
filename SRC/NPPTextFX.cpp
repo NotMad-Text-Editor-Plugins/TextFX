@@ -434,7 +434,8 @@ doit:
       //if (dest1) strcpy((dest1+*destsz-1),"#$"); // $ is beyond string
 	rv = dest1 - *dest;
     if (dest1 && clear && *destsz>oldsz)
-		memset((char*)dest1+oldsz,0,sizeof(TCHAR)*(*destsz-oldsz));
+		memset(dest1+oldsz,0,sizeof(TCHAR)*(*destsz-oldsz));
+		//memset((char*)dest1+oldsz,0,sizeof(TCHAR)*(*destsz-oldsz));
     *dest = dest1;
   }
 
@@ -671,10 +672,10 @@ EXTERNC int memsetarm(TCHAR **dest,size_t *destsz,size_t *destlen,int chr,size_t
     *dest=NULL;
     *destsz=slen;
   }
-  int rv=armreallocsafe(dest, destsz, CHARSIZE(destlen1 + slen), destlen ? ARMSTRATEGY_INCREASE : ARMSTRATEGY_REDUCE, 0, THETITLE);
+  int rv=armreallocsafe(dest, destsz, (destlen1 + slen), destlen ? ARMSTRATEGY_INCREASE : ARMSTRATEGY_REDUCE, 0, THETITLE);
   if (*dest) {
     if (slen) {
-      memset(*dest+destlen1,chr,slen);
+      memset(*dest+destlen1,chr,sizeof(TCHAR)*slen);
       destlen1 += slen;
     }
     if (destlen) *destlen=destlen1;
@@ -950,7 +951,7 @@ dostring:
 						if (!pass) {
 							tlen+=llen;
 						} else {
-							memset(dest1,lastch,llen);
+							memset(dest1,lastch,sizeof(TCHAR)*llen);
 							dest1 += llen;
 							*dest1='\0';
 						}
@@ -1085,7 +1086,7 @@ EXTERNC void testsprintfuncs(void) {
   testfree(0, buf, _T("1234567"),rv);
   rv=snprintfX(buf, 8, _T("123"));
   testfree(0, buf, _T("123"),rv);
-  memset(buf,0,sizeof(buf));
+  memset(buf,0,sizeof(TCHAR)*lstrlen(buf));
   // Borland,DMC  : 7:7,'\0' 8:8,'8'  9:9,'9'
   // MSVC,MinGW   : 7:7,'\0' 8:8,'8' 9:-1,'9'
   // Watcom,Pelles: 7:7,'\0' 8:8,'\0' 9:9,'\0' (Pelles with MSVCRT.LIB is same as MinGW)
@@ -1142,7 +1143,7 @@ EXTERNC void *memmovetestA(CHAR *dest, CHAR *src, size_t n) {
 // unlike other arm routines, destlen is required here because memmovearm() is not interested in appending anything.
 // returns the number of bytes *dest was changed by during a realloc() so the caller can adjust their pointers
 // memmovearm always moves one extra byte assuming the caller is trying to maintain a \0 terminated C-string
-EXTERNC int memmovearm(void **dest, size_t *destsz, size_t *destlen, TCHAR *destp, TCHAR *sourcep
+EXTERNC int memmovearm(TCHAR **dest, size_t *destsz, size_t *destlen, TCHAR *destp, TCHAR *sourcep
 #if NPPDEBUG
 	, int notest
 #endif
@@ -1245,11 +1246,11 @@ EXTERNC void memcqspnstartA(const CHAR *find, unsigned findl, unsigned *quick) {
 // returns end when the search fails
 EXTERNC TCHAR *memcqspn(const TCHAR *buf, const TCHAR *end, const unsigned *quick) {
 	if (buf < end) for (; buf < end; buf++) {
-		if (quick[(unsigned)*(unsigned char *)buf / (sizeof(unsigned) * 8)] & 1 << ((unsigned)*(unsigned char *)buf % (sizeof(unsigned) * 8)))
+		if (quick[((unsigned)*buf) / (sizeof(unsigned) * 8)] & 1 << (((unsigned)*buf) % (sizeof(unsigned) * 8)))
 			return((TCHAR*)buf);
 	}
 	else if (buf > end) for (; buf > end; buf--) {
-		if (quick[(unsigned)*(unsigned char *)buf / (sizeof(unsigned) * 8)] & 1 << ((unsigned)*(unsigned char *)buf % (sizeof(unsigned) * 8)))
+		if (quick[((unsigned)*buf) / (sizeof(unsigned) * 8)] & 1 << (((unsigned)*buf) % (sizeof(unsigned) * 8)))
 			return((TCHAR*)buf);
 	}
 	return((TCHAR*)end);
@@ -1317,7 +1318,7 @@ EXTERNC TCHAR *memcspn(const TCHAR *ibuf, const TCHAR *iend, const TCHAR *ifind,
 		break;
 	default:
 		if (buf < end) {
-			const TCHAR *findt, *finde = find + CHARSIZE(findl);
+			const TCHAR *findt, *finde = find + (findl);
 			unsigned char min = (unsigned char)-1, max = 0, and_mask = (unsigned char)~0, or_mask = 0;
 			for (findt = find; findt < finde; findt++) {
 				if (max < *findt)
@@ -2112,7 +2113,7 @@ EXTERNC unsigned memchrtran(TCHAR **dest, size_t *destsz, size_t *destlen, const
 		for (memcqspnstart(find, lfind, quick), end = *dest + *destlen, lrepl = wcslen(repl); (d = memcqspn(d, end, quick)) < end; ) {
 			fpn = (const TCHAR *)wmemchr(find, *d, lfind) - find;
 			if (fpn >= lrepl) {
-				d += memmovearmtest((void**)dest, destsz, destlen, d + lnew, d + lold, 1);
+				d += memmovearmtest(dest, destsz, destlen, d + lnew, d + lold, 1);
 				if (!*dest)
 					goto failbreak;
 				end = *dest + *destlen;
@@ -2142,7 +2143,7 @@ EXTERNC unsigned memstrtran(TCHAR **dest, size_t *destsz, size_t *destlen, TCHAR
 		while ((d = memstr(d, end, oldst, lold)) < end) {
 			if (lnew != lold) {
 				unsigned dx;
-				dx = memmovearmtest((void**)dest, destsz, destlen, d + lnew, d + lold, 1);
+				dx = memmovearmtest(dest, destsz, destlen, d + lnew, d + lold, 1);
 				if (!*dest)
 					goto failbreak; // can't test this. using stopeol always has an intentional \0 in the string.
 				d += dx; // thanks to stopeol we can't use the easier method here
@@ -2172,18 +2173,19 @@ failbreak:
 EXTERNC unsigned strchrstrans(TCHAR **dest, size_t *destsz, size_t *destlen, TCHAR **stopeol, const TCHAR *chrs, unsigned chrsl, const TCHAR *repls) {
 #define lold 1
   unsigned n=0,lnew;
-  TCHAR *d,*newst,*dnew,*end;
+  TCHAR *ddd,*newst,*dnew,*end;
   TCHAR ckst[3];
   unsigned quick[256/(sizeof(unsigned)*8)];
 
-  if ((d=*dest) && lold && chrsl) {
-    end=d+*destlen;
-    if (stopeol) end=memcspn(d=*stopeol,end,L"\r\n",2);
+  if ((ddd=*dest) && lold && chrsl) {
+    end=ddd+*destlen;
+    if (stopeol) end=memcspn(ddd=*stopeol,end,L"\r\n",2);
     ckst[0]=*repls;
     ckst[2]='\0';
+
     memcqspnstart(chrs,chrsl,quick);
-    while ( (d=memcqspn(d,end,quick))<end) {
-      ckst[1]=*d;
+    while ( (ddd=memcqspn(ddd,end,quick))<end) {
+      ckst[1]=*ddd;
       if (!(newst=(TCHAR *)wcsstr(repls,ckst))) {
 #if NPPDEBUG /* { */
         MessageBoxFree(g_nppData._nppHandle, smprintf(_T("strchrstrans: Improper String Format (#%d)\r\n%s"), 1, repls), _T(PLUGIN_NAME), MB_OK|MB_ICONSTOP);
@@ -2200,19 +2202,19 @@ EXTERNC unsigned strchrstrans(TCHAR **dest, size_t *destsz, size_t *destlen, TCH
       lnew=dnew-newst;
       if (lnew != lold) {
         unsigned dx;
-        dx=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+        dx=memmovearmtest(dest, destsz, destlen, ddd+lnew, ddd+lold, 1);
 		if (!*dest)
 			goto failbreak;
-        d+=dx; // thanks to stopeol we can't use the easier method here
+        ddd+=dx; // thanks to stopeol we can't use the easier method here
         end+=dx+lnew-lold;
       }
       if (lnew) {
-        memcpy(d,newst,lnew);
-        d+=lnew;
+        memcpy(ddd,newst,sizeof(TCHAR)*lnew);
+        ddd+=lnew;
       }
       n++;
     }
-    if (stopeol) *stopeol = d;
+    if (stopeol) *stopeol = ddd;
   }
 failbreak:
   return(n);
@@ -2231,6 +2233,7 @@ EXTERNC unsigned strchrstransA(CHAR **dest, size_t *destsz, size_t *destlen, CHA
     if (stopeol) end=memcspnA(d=*stopeol,end,"\r\n",2);
     ckst[0]=*repls;
     ckst[2]='\0';
+
     memcqspnstartA(chrs,chrsl,quick);
     while ( (d=memcqspnA(d,end,quick))<end) {
       ckst[1]=*d;
@@ -2255,6 +2258,8 @@ EXTERNC unsigned strchrstransA(CHAR **dest, size_t *destsz, size_t *destlen, CHA
       if (lnew != lold) {
         unsigned dx;
         dx=memmovearmtestA((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+
+		//::MessageBoxA(NULL, *dest, "", MB_OK);
 		if (!*dest)
 			goto failbreak;
         d+=dx; // thanks to stopeol we can't use the easier method here
@@ -2297,7 +2302,7 @@ EXTERNC unsigned prepostpendlines(TCHAR **dest, size_t *destsz, size_t *destlen,
 #define newst begin
 #define lnew lbegin
 		if (lnew != lold) {
-			d += memmovearmtest((void**)dest, destsz, destlen, d + lnew, d + lold, 1);
+			d += memmovearmtest(dest, destsz, destlen, d + lnew, d + lold, 1);
 			if (!*dest)
 				goto failbreak;
 		}
@@ -2315,7 +2320,7 @@ EXTERNC unsigned prepostpendlines(TCHAR **dest, size_t *destsz, size_t *destlen,
 #define newst end
 #define lnew lend
 		if (lnew != lold) {
-			d += memmovearmtest((void**)dest, destsz, destlen, d + lnew, d + lold, 1); if (!*dest) goto failbreak;
+			d += memmovearmtest(dest, destsz, destlen, d + lnew, d + lold, 1); if (!*dest) goto failbreak;
 		}
 		if (lnew) {
 			memcpy(d, newst, lnew);
@@ -2415,7 +2420,7 @@ EXTERNC unsigned rewraptext(TCHAR **dest, size_t *destsz, size_t *destlen, unsig
           continue;
         }
         if (lnew != lold) {
-          d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+          d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 		  if (!*dest)
 			  goto failbreak;
           end = *dest + *destlen;
@@ -2547,7 +2552,7 @@ EXTERNC unsigned encodeURIcomponent(TCHAR **dest, size_t *destsz, size_t *destle
         //end=*dest+*destlen;
       } else {
         if (lnew != lold) {
-          ddd+=memmovearmtest((void**)dest,destsz,destlen,ddd+lnew,ddd+lold,1); if (!*dest) goto failbreak;
+          ddd+=memmovearmtest(dest,destsz,destlen,ddd+lnew,ddd+lold,1); if (!*dest) goto failbreak;
           end=*dest+*destlen;
         }
         if (lnew) {
@@ -2669,7 +2674,7 @@ LRESULT(*gScintillaMessageSender)(BOOL, UINT, WPARAM, LPARAM) = &SendScintillaMe
 // like sprintf(dest,"%-*s%s",n,"",source) returns number of characters written
 // eventually this will be replaced with smprintfpath() when it gets space padding features
 EXTERNC unsigned strcatspacel(TCHAR *dest,const TCHAR *source,size_t n) {
-  memset(dest,' ',n);
+  memset(dest,' ',sizeof(TCHAR)*n);
   wcscpy(dest+n,source);
 
   return(n + wcslen(source));
@@ -2769,7 +2774,7 @@ EXTERNC unsigned insertclipboardcolumn(TCHAR **dest, size_t *destsz, size_t *des
         d+=offset;
         chn-=offset;
         if (lnew != lold) {
-          d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+          d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 		  if (!*dest)
 			  goto failbreak;
           end=*dest+*destlen;
@@ -3157,7 +3162,7 @@ EXTERNC unsigned stripHTMLtags(TCHAR **dest, size_t *destsz, size_t *destlen, co
 				break;
 			}
 			if (lnew != lold) {
-				d += memmovearmtest((void**)dest, destsz, destlen, d + lnew, d + lold, 1);
+				d += memmovearmtest(dest, destsz, destlen, d + lnew, d + lold, 1);
 				if (!*dest)
 					goto failbreak;
 				end = *dest + *destlen;
@@ -3241,7 +3246,7 @@ EXTERNC unsigned splitlinesatch(TCHAR **dest, size_t *destsz, size_t *destlen, c
         } else if (*d==splitch) {
                 d++;
         if (lnew != lold) {
-          d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+          d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 		  if (!*dest)
 			  goto failbreak;
           end = *dest+*destlen;
@@ -3282,7 +3287,7 @@ EXTERNC unsigned findqtstrings(TCHAR **dest, size_t *destsz, size_t *destlen, co
         break;
       }
       if (lnew != lold) {
-        d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+        d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 		if (!*dest)
 			goto failbreak;
         end = *dest+*destlen;
@@ -3318,7 +3323,7 @@ EXTERNC unsigned space2tabs(TCHAR **dest, size_t *destsz, size_t *destlen, int u
         if (preserveodd && lnew*tabwidth!=indent) lnew=lold=0;
       } else lnew=indent;
           if (lnew != lold) {
-            d += memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+            d += memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 			if (!*dest)
 				goto failbreak;
             end = *dest+*destlen;
@@ -3410,7 +3415,7 @@ EXTERNC unsigned reindentcode(TCHAR **dest, size_t *destsz, size_t *destlen, int
         if (lnew) lnew--;
       } else if (!*dp || *d=='#' || *d=='\r' || *d=='\n' || label) lnew=0;
       if (lnew != lold) {
-        d+=memmovearmtest((void**)dest,destsz,destlen,d+lnew,d+lold,1); if (!*dest) goto failbreak;
+        d+=memmovearmtest(dest,destsz,destlen,d+lnew,d+lold,1); if (!*dest) goto failbreak;
         end=*dest+*destlen;
         n++;
       }
@@ -3544,7 +3549,7 @@ EXTERNC unsigned lineup(TCHAR **dest, size_t *destsz, size_t *destlen, char lch,
               }
             }
             if (lnew != lold) {
-              d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+              d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 			  if (!*dest)
 				  goto failbreak;
               end = *dest + *destlen;
@@ -3586,7 +3591,7 @@ EXTERNC unsigned filldown(TCHAR **dest, size_t *destsz, size_t *destlen, int ins
       if (lnew<=chn || insert) {
         lold=insert?0:lnew;
         if (lnew != lold) {
-          d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+          d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 		  if (!*dest)
 			  goto failbreak;
           end=*dest+*destlen;
@@ -3826,7 +3831,7 @@ EXTERNC unsigned indentlines(TCHAR **dest, size_t *destsz, size_t *destlen, int 
           //end=*dest+*destlen;
         } else {
           if (lnew != lold) {
-            d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+            d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 			if (!*dest)
 				goto failbreak;
             end=*dest+*destlen;
@@ -3878,7 +3883,7 @@ EXTERNC unsigned indentlinessurround(TCHAR **dest, size_t *destsz, size_t *destl
     n+=indentlines(dest,destsz,destlen,usetabs,tabwidth);
 	if (!*dest)
 		goto failbreak;
-    memmovearmtest((void**)dest, destsz, destlen, *dest+indln+1+eollen, *dest+lold,1);
+    memmovearmtest(dest, destsz, destlen, *dest+indln+1+eollen, *dest+lold,1);
 	if (!*dest)
 		goto failbreak;
     memcpy(*dest,ind,indln);
@@ -4012,7 +4017,7 @@ EXTERNC unsigned hexbyterunstolittlendian(TCHAR **dest, size_t *destsz, size_t *
       if ((dp==end || *dp==' ' || *dp=='-') && (lold=dp-d)==3*bytewidth-1) {
         lnew=2*bytewidth;
         if (lnew != lold) {
-          d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+          d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 		  if (!*dest)
 			  goto failbreak;
           end=*dest+*destlen;
@@ -4049,7 +4054,7 @@ EXTERNC unsigned littlendiantohexbyteruns(TCHAR **dest, size_t *destsz, size_t *
             lold=d-dp;
             d=dp;
             if (lnew != lold) {
-              d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+              d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 			  if (!*dest)
 				  goto failbreak;
               end=*dest+*destlen;
@@ -4200,7 +4205,7 @@ EXTERNC unsigned converteol(TCHAR **dest, size_t *destsz, size_t *destlen, unsig
 		do {
 			lold = (*d == '\r' && d[1] == '\n') ? 2 : 1;
 			if (lnew != lold) {
-				d += memmovearmtest((void**)dest, destsz, destlen, d + lnew, d + lold, 1);
+				d += memmovearmtest(dest, destsz, destlen, d + lnew, d + lold, 1);
 				if (!*dest)
 					goto failbreak;
 				end = *dest + *destlen;
@@ -4228,7 +4233,7 @@ EXTERNC unsigned insertlinenumbers(TCHAR **dest, size_t *destsz, size_t *destlen
       snprintfX(buf, 9, _T("%*.*u"), sizeof(buf)-1, sizeof(buf)-1, lno);
       buf[lnew-1]=' ';
       if (lnew != lold) {
-        d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+        d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 		if (!*dest) goto failbreak;
         end=*dest+*destlen;
       }
@@ -4259,7 +4264,7 @@ EXTERNC unsigned deletefirstword(TCHAR **dest, size_t *destsz, size_t *destlen) 
         if (d[lold]==' ' || d[lold]=='\t') {
                 lold++;
         if (lnew != lold) {
-          d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+          d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 		  if (!*dest)
 			  goto failbreak;
           end=*dest+*destlen;
@@ -4286,7 +4291,7 @@ EXTERNC unsigned cleanemailquoting(TCHAR **dest, size_t *destsz, size_t *destlen
     for(d=*dest,end=*dest+*destlen ; d<end; ) {
         lold=memspn(d,end,L"> \t",3)-d;
         if (lnew != lold) {
-          d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+          d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 		  if (!*dest)
 			  goto failbreak;
           end=*dest+*destlen;
@@ -4318,7 +4323,7 @@ EXTERNC unsigned extendblockspaces(TCHAR **dest, size_t *destsz, size_t *destlen
                 if (lnew<maxlength) {
           lnew=maxlength-lnew;
           if (lold != lnew) {
-            d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+            d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 			if (!*dest)
 				goto failbreak;
             end=*dest+*destlen;
@@ -5349,7 +5354,7 @@ EXTERNC BOOL XlatPathEnvVarsarm(TCHAR **dest, size_t *destsz, size_t *destlen) {
 			lnew--; // supress extras slash
       }
       if (lnew != lold) {
-        d+=memmovearmtest((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+        d+=memmovearmtest(dest, destsz, destlen, d+lnew, d+lold, 1);
 		if (!*dest)
 			goto failbreak;
         end=*dest+*destlen;
@@ -5584,6 +5589,8 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 		unsigned anchorPos = SENDMSGTOCED(currentEdit, SCI_GETANCHOR, 0, 0);
 		unsigned eolType = SENDMSGTOCED(currentEdit, SCI_GETEOLMODE, 0, 0);
 
+		bool ParmsStr = (flags&CAFLAG_CHARISNREADOFTCHAR)!=0;
+
 		// Unicode check
 		if ((flags & CAFLAG_UNICODENTONLY) && !g_fOnNT) {
 			MessageBox(g_nppData._nppHandle,
@@ -5731,8 +5738,6 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 
 		bool YEAH=0;
 
-		bool ParmsStr = flags&CAFLAG_CHARISNREADOFTCHAR!=0;
-
 		//MessageBoxFree(g_nppData._nppHandle,smprintf("#2 textBufferLength:%u txszW:%u txW:%p",textBufferLength,txszW,txW),PLUGIN_NAME, MB_OK|MB_ICONSTOP);
 		//MessageBoxFree(g_nppData._nppHandle,smprintf("%sUsing Unicode",(flags&CAFLAG_USEUNICODE)?"":"Not "),PLUGIN_NAME, MB_OK|MB_ICONSTOP);
 		SENDMSGTOCED(currentEdit, SCI_SETCURSOR, SC_CURSORWAIT, 0);
@@ -5774,7 +5779,7 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 			break;
 		case CONVERTALL_CMD_strchrstrans:
 		{
-			if(0) {
+			if(ParmsStr) {
 				rv = strchrstransA(&txUCS2, &allocatedTextBufferSize, &textBufferLength, NULL, (CHAR*)s1, strlen((CHAR*)s1), (CHAR*)s2);
 				YEAH=1;
 			} else {
@@ -5899,8 +5904,8 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 			{
 				// Go convert!
 				// UTF-8 --> UCS-2
-				//sln = UTF8FromUCS2(txUnicode, allocatedConvertedTextBufferSize, (char*)txUCS2, textBufferLength, FALSE);
-				sln = UCS2FromUTF8(txUCS2, allocatedConvertedTextBufferSize, txUnicode, textBufferLength, FALSE, 0);
+				sln = UTF8FromUCS2(txUnicode, allocatedConvertedTextBufferSize, (char*)txUCS2, textBufferLength, FALSE);
+				//sln = UCS2FromUTF8(txUCS2, allocatedConvertedTextBufferSize, txUnicode, textBufferLength, FALSE, 0);
 				txUCS2[sln] = '\0';
 			}
 #if NPPDEBUG
