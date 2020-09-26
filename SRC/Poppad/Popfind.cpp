@@ -1384,7 +1384,7 @@ static int __cdecl PopFindReplaceCallback(unsigned uCommand,LPFINDREPLACEX pVoid
       if (pfr->PersistentFlags&FRP_SELECTED) CheckFlags(pfr->hwndSelf,pfr);
     }
     g_hDlg=pfr->hwndSelf;
-    g_wpScintillaOrigProc1=(WNDPROC)SetWindowLongPtr(GetDlgItem(pfr->hwndSelf,IDC_EDTFIND), GWLP_WNDPROC,(LONG)ScintillaSubclassProc1);
+    g_wpScintillaOrigProc1=(WNDPROC)SetWindowLongPtr(GetDlgItem(pfr->hwndSelf,IDC_EDTFIND), GWLP_WNDPROC,(LONG_PTR)ScintillaSubclassProc1);
     if ((pfr->PersistentFlags&FRP_AUTOGRABFIND) && !(pfr->PersistentFlags&FRC_FINDINCREMENTAL) ) {
       unsigned uSellen=SENDMSGTOED(pfr->hwndEditor, SCI_GETSELTEXT, 0, NULL)-1; // NUL byte not included
       if (!uSellen) { // get current word
@@ -1418,7 +1418,7 @@ static int __cdecl PopFindReplaceCallback(unsigned uCommand,LPFINDREPLACEX pVoid
     }
     int iCodePage=SENDMSGTOED(pfr->hwndEditor,SCI_GETCODEPAGE,0,0);
     SetWindowTextUTF8(pfr,GetDlgItem(pfr->hwndSelf,IDC_EDTFIND),pfr->lpstrFindWhat,pfr->wFindWhatLen,iCodePage);
-    g_wpScintillaOrigProc2=(WNDPROC)SetWindowLongPtr(GetDlgItem(pfr->hwndSelf,IDC_EDTREPLACE), GWLP_WNDPROC,(LONG)ScintillaSubclassProc2);
+    g_wpScintillaOrigProc2=(WNDPROC)SetWindowLongPtr(GetDlgItem(pfr->hwndSelf,IDC_EDTREPLACE), GWLP_WNDPROC,(LONG_PTR)ScintillaSubclassProc2);
     SetWindowTextUTF8(pfr,GetDlgItem(pfr->hwndSelf,IDC_EDTREPLACE),pfr->lpstrReplaceWith,pfr->wReplaceWithLen,iCodePage);
     SetWindowTextFree(GetDlgItem(pfr->hwndSelf,stc1),smprintf(_T("^I=Tab ^M=Return (%s)"),(pfr->InternalFlags&FRI_UNICODE)?"UNICODE":"ANSI"));
     } break;

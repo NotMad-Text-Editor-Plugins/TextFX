@@ -3732,66 +3732,83 @@ TCHAR *strcpyline(TCHAR *dest, TCHAR *src) {
   return(dest);
 }
 
+// copies only a single line, returns \0 end of dest
+CHAR *strcpylineA(CHAR *dest, CHAR *src) {
+  do {
+    *dest=*src++;
+    if (!*dest)
+		break;
+    //if (*dest=='\n' || (*dest=='\r' && *src!='\n') ) {dest++; *dest='\0'; break;}
+    if (*dest=='\n' || *dest=='\r') {*dest='\0'; break;}
+    dest++;
+  } while(1);
+
+  return(dest);
+}
+
 // new feature: numeric sort
 // new feature: ignore leading spaces,tabs
-EXTERNC unsigned strqsortlines(TCHAR **dest, size_t *destsz, size_t *destlen, int nocase, int ascending, unsigned column) {
+EXTERNC unsigned strqsortlinesA(CHAR **dest, size_t *destsz, size_t *destlen, int nocase, int ascending, unsigned column) {
   unsigned n=0/*,bytes*/,lineno,lineno2;
   size_t linessz;
-  TCHAR *d,*dp,*nstr;
-  TCHAR **lines=NULL;
+  CHAR *ddd,*dp,*nstr;
+  CHAR **lines=NULL;
   if (*dest) {
     g_fcmpcolumn=column;
     g_fcmpascending=ascending;
-    for (d = *dest + wcsspn(*dest, _T("\r\n")), lineno=0,linessz=0; *d ; lineno++) {
-      armreallocsafe((TCHAR**)&lines, &linessz, (lineno+1)*sizeof(*lines), ARMSTRATEGY_INCREASE, 0, _T("strqsortlines"));
+	auto end=*dest+strlen(*dest);
+    for (ddd = *dest + strspn(*dest, ("\r\n")), lineno=0,linessz=0; *ddd ; lineno++) {
+      armreallocsafeA((CHAR**)&lines, &linessz, (lineno+1)*sizeof(*lines), ARMSTRATEGY_INCREASE, 0, _T("strqsortlines"));
 	  if (!lines)
 		  goto failbreak;
-      lines[lineno]=d;
-      d+= wcsspn(d, _T("\r\n"));
-      while(*d && (*d=='\r' || *d=='\n')) d++;
+      lines[lineno]=ddd;
+	  auto idx=strcspn(ddd, ("\r\n"));
+      ddd+= idx;
+      while(*ddd && (*ddd=='\r' || *ddd=='\n')) ddd++;
     }
-    if (!(nstr=(TCHAR *)mallocsafe(CHARSIZE(*destlen + 1), _T("strqsortlines"))))
+
+    if (!(nstr=(CHAR *)mallocsafe((*destlen + 1), _T("strqsortlines"))))
 		goto failbreak;
     //memset(nstr,0,*destlen+1);
     g_fcmpnocase=nocase;
     qsortintro(lines,lineno,sizeof(lines[0]),fcmpline);
-	for (dp = *dest, d = nstr, lineno2 = 0; lineno2 < lineno; lineno2++) {
+	for (dp = *dest, ddd = nstr, lineno2 = 0; lineno2 < lineno; lineno2++) {
 		if (lineno2 == 0 || !g_SortLinesUnique || fcmpline(lines + lineno2, lines + lineno2 - 1)) {
 			if (!g_SortLinesUnique) {
 				while (*dp == '\r' || *dp == '\n') {
-					*d = *dp;
-					d++;
+					*ddd = *dp;
+					ddd++;
 					dp++;
 					// import the line endings from the unsorted string
 				}
 			}
 			else {
 				if (*dp == '\r' || *dp == '\n') {
-					*d = *dp; d++; dp++;
+					*ddd = *dp; ddd++; dp++;
 					if (*(dp - 1) == '\r' && *dp == '\n') {
-						*d = *dp;
-						d++;
+						*ddd = *dp;
+						ddd++;
 						dp++;
 					}
 				}
 			}
-			dp += wcsspn(dp, _T("\r\n"));
-			d = strcpyline(d, lines[lineno2]);
+			dp += strcspn(dp, ("\r\n"));
+			ddd = strcpylineA(ddd, lines[lineno2]);
 		}
 	}
 	if (!g_SortLinesUnique) {
-		wcscpy(d,dp);
-		d += wcslen(dp);
+		strcpy(ddd,dp);
+		ddd += strlen(dp);
 		// grab extra lines at the end
 	}
 #if NPPDEBUG /* { */
-    if (!g_SortLinesUnique && *destlen!=(unsigned)(d-nstr))
+    if (!g_SortLinesUnique && *destlen!=(unsigned)(ddd-nstr))
       MessageBox(g_nppData._nppHandle, _T("The size of the sort buffer should not have changed"), _T(PLUGIN_NAME), MB_OK|MB_ICONWARNING);
 #endif /* } */
     freesafe(*dest, _T("strqsortlines"));
     *dest=nstr;
     *destsz=*destlen+1;
-    *destlen=d-nstr;
+    *destlen=ddd-nstr;
     n=1;
   }
 failbreak:
@@ -5643,7 +5660,7 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 			break;
 		}
 		unsigned p1diff = 0;
-		if (flags & CAFLAG_EXTENDTOLINES) {
+		if (flags & CAFLAG_EXTENDTOLINES) { // 扩展至行
 			unsigned p1o = posStart;
 			if (lineextend(currentEdit, &posStart, &posEnd, FALSE)) {
 				p1line = SENDMSGTOCED(currentEdit, SCI_LINEFROMPOSITION, posStart, 0); // I'm not sure if this is necessary
@@ -5741,6 +5758,7 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 		//MessageBoxFree(g_nppData._nppHandle,smprintf("#2 textBufferLength:%u txszW:%u txW:%p",textBufferLength,txszW,txW),PLUGIN_NAME, MB_OK|MB_ICONSTOP);
 		//MessageBoxFree(g_nppData._nppHandle,smprintf("%sUsing Unicode",(flags&CAFLAG_USEUNICODE)?"":"Not "),PLUGIN_NAME, MB_OK|MB_ICONSTOP);
 		SENDMSGTOCED(currentEdit, SCI_SETCURSOR, SC_CURSORWAIT, 0);
+		//TCHAR buff[1];buff[0]=cmd; ::MessageBox(NULL, buff, TEXT(""), MB_OK);
 		switch (cmd) {
 		case CONVERTALL_CMD_memlowercase:
 			rv = memlowercase(txUnicode, textBufferLength);
@@ -5812,7 +5830,8 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 			rv = indentlinessurround(&txUnicode, &allocatedTextBufferSize, &textBufferLength, SENDMSGTOCED(currentEdit, SCI_GETUSETABS, 0, 0), SENDMSGTOCED(currentEdit, SCI_GETTABWIDTH, 0, 0), eolType);
 			break;
 		case CONVERTALL_CMD_strqsortlines:
-			rv = strqsortlines(&txUnicode, &allocatedTextBufferSize, &textBufferLength, *s1 == 'n' ? 1 : 0, *s2 == 'a' ? 1 : 0, p1diff);
+			rv = strqsortlinesA(&txUCS2, &allocatedTextBufferSize, &textBufferLength, *s1 == 'n' ? 1 : 0, *s2 == 'a' ? 1 : 0, p1diff);
+			YEAH=1;
 			break;
 		case CONVERTALL_CMD_killwhitenonqt:
 			rv = killwhitenonqt(txUnicode, &textBufferLength, s1[0] == 'v' ? 1 : 0);
@@ -7334,8 +7353,8 @@ EXTERNC BOOL altercheck(int itemno, char action) {
 // these are used to instantly access the menu items
 unsigned g_miSortAscending;
 EXTERNC PFUNCPLUGINCMD pfSortAscending(void)    {altercheck(g_miSortAscending,'!');}
-EXTERNC PFUNCPLUGINCMD pfqsortlinesnc(void)   { convertall('q', CAFLAG_EXTENDTOLINES|CAFLAG_DENYBINARY, _T("n"), funcItem[g_miSortAscending]._init2Check ? _T("a") : _T("d"), NULL, NULL); }
-EXTERNC PFUNCPLUGINCMD pfqsortlinesc(void)    { convertall('q', CAFLAG_EXTENDTOLINES|CAFLAG_DENYBINARY, _T("c"), funcItem[g_miSortAscending]._init2Check ? _T("a") : _T("d"), NULL, NULL); }
+EXTERNC PFUNCPLUGINCMD pfqsortlinesnc(void)   { convertall(CONVERTALL_CMD_strqsortlines, CAFLAG_EXTENDTOLINES|CAFLAG_DENYBINARY, _T("n"), funcItem[g_miSortAscending]._init2Check ? _T("a") : _T("d"), NULL, NULL); }
+EXTERNC PFUNCPLUGINCMD pfqsortlinesc(void)    { convertall(CONVERTALL_CMD_strqsortlines, CAFLAG_EXTENDTOLINES|CAFLAG_DENYBINARY, _T("c"), funcItem[g_miSortAscending]._init2Check ? _T("a") : _T("d"), NULL, NULL); }
 
 unsigned g_miBlockOverwrite;
 EXTERNC PFUNCPLUGINCMD pfBlockOverwrite(void) {

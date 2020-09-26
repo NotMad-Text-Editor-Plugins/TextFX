@@ -264,6 +264,7 @@ namespace Tests
 
 		TEST_METHOD(Data_Test)
 		{
+			Logger::WriteMessage("In Data_Test ==>");
 			TCHAR* p1=new TCHAR[64]{0};
 			p1[63]='\0';
 			TCHAR* p2=p1+3;
@@ -280,6 +281,17 @@ namespace Tests
 			memcpy(p1, data, sizeof(TCHAR)*lstrlen(data));
 			Logger::WriteMessage(p1);
 
+			{
+				CHAR printBuf[64];
+				//CHAR* buffer = "123456789"; 
+				CHAR* buffer = new CHAR[64]; strcpy(buffer, "123456789");
+				sprintf(printBuf,("123 :: %d"), strcspn(buffer, "789"));
+				Logger::WriteMessage(printBuf);
+
+				buffer[2]='\0';
+				sprintf(printBuf,("456 :: %d"), strcspn(buffer, "789"));
+				Logger::WriteMessage(printBuf);
+			}
 		}
 
 	};
