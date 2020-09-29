@@ -264,13 +264,27 @@ namespace Tests
 
 		TEST_METHOD(Data_Test)
 		{
+			std::string dataX="happy";
+			std::string dataX_SUB=dataX.substr(2);
+
+			TCHAR buffer[100]={0};
+
+			wsprintf(buffer,TEXT("happy=%d=%d"), dataX.data(), dataX_SUB.data());
+			Logger::WriteMessage(buffer);
+
+			CHAR* Xdata = new CHAR[64];
+
+			std::string dataXX=Xdata;
+
+			wsprintf(buffer,TEXT("sad=%d=%d"), Xdata, dataXX.data());
+			Logger::WriteMessage(buffer);
+
 			Logger::WriteMessage("In Data_Test ==>");
 			TCHAR* p1=new TCHAR[64]{0};
 			p1[63]='\0';
 			TCHAR* p2=p1+3;
 			Assert::AreEqual(3, (int)(p2-p1));
 			Assert::AreEqual(4, (int)(1+p2-p1));
-			TCHAR buffer[100]={0};
 			wsprintf(buffer,TEXT("%d=%d=%d"), lstrlen(p1),(int) sizeof(p1), sizeof(TCHAR));
 			Logger::WriteMessage(buffer);
 			//Assert::AreEqual();
