@@ -6133,7 +6133,7 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 		// Go convert!
 		size_t textBufferConvertedLength = UCS2FromUTF8(txUCS2, textBufferLength, NULL, 0, FALSE, NULL) + 1;
 		allocatedConvertedTextBufferSize = roundtonextpower(textBufferConvertedLength + origexpand + 1);
-		if (!(txUnicode = (TCHAR*)mallocsafe(allocatedConvertedTextBufferSize, _T("convertall-allocatedTextBufferSize")))) {
+		if (!(txUnicode = (TCHAR*)mallocsafe(sizeof(TCHAR)*allocatedConvertedTextBufferSize, _T("convertall-allocatedTextBufferSize")))) {
 			MessageBox(g_nppData._nppHandle, _T("Not enough memory"), _T(PLUGIN_NAME), MB_OK | MB_ICONSTOP);
 			break;
 		}
