@@ -5996,6 +5996,8 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 
 		bool ParmsStr = (flags&CAFLAG_CHARISNREADOFTCHAR)!=0;
 
+		int line = SENDMSGTOCED(currentEdit, SCI_LINEFROMPOSITION, anchorPos, 0);
+
 		// Unicode check
 		if ((flags & CAFLAG_UNICODENTONLY) && !g_fOnNT) {
 			MessageBox(g_nppData._nppHandle,
@@ -6236,11 +6238,8 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 		case CONVERTALL_CMD_reindentcode:
 		{
 			//rv = reindentcode(&txUnicode, &allocatedTextBufferSize, &textBufferLength, SENDMSGTOCED(currentEdit, SCI_GETUSETABS, 0, 0), SENDMSGTOCED(currentEdit, SCI_GETTABWIDTH, 0, 0));
-			
 			rv = reindentcodeA(&txUCS2, &allocatedTextBufferSize, &textBufferLength, SENDMSGTOCED(currentEdit, SCI_GETUSETABS, 0, 0), SENDMSGTOCED(currentEdit, SCI_GETTABWIDTH, 0, 0));
-
 			YEAH=1;
-
 			break;
 		}
 		case CONVERTALL_CMD_submitW3C:
@@ -6331,7 +6330,6 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 			// Finally release the converted buffer
 			freesafe(txUnicode, _T("convertall-end"));
 			txUnicode = NULL;
-
 			if (rv) {
 				SENDMSGTOCED(currentEdit, SCI_BEGINUNDOACTION, 0, 0);
 				if (flags & CAFLAG_BLOCKMODE) {
@@ -6355,8 +6353,9 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 					posEnd += textBufferLength - selectionLength;
 					if (rv) {
 						if (flags&CAFLAG_GETALLWHENNOSELECTION) {
-							SENDMSGTOCED(currentEdit, SCI_SETTEXT, 0, "");
-							SENDMSGTOCED(currentEdit, SCI_ADDTEXT, textBufferLength, txUCS2);
+							//SENDMSGTOCED(currentEdit, SCI_CLEARALL, 0, "");
+							//SENDMSGTOCED(currentEdit, SCI_ADDTEXT, textBufferLength, txUCS2);
+							SENDMSGTOCED(currentEdit, SCI_SETTEXT, textBufferLength, txUCS2);
 						}
 						else {
 							SENDMSGTOCED(currentEdit, SCI_REPLACESEL, 0, "");
@@ -6370,6 +6369,9 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 				}
 				// todo restore position
 				//SENDMSGTOCED(currentEdit, SCI_GOTOPOS, 0, 0);
+				if (flags&CAFLAG_GETALLWHENNOSELECTION) {
+					SENDMSGTOCED(currentEdit, SCI_GOTOLINE, line, 0);
+				}
 			} // end if (rv)
 			SENDMSGTOCED(currentEdit, SCI_ENDUNDOACTION, 0, 0);
 		} 
