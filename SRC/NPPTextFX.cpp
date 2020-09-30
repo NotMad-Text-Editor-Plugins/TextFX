@@ -1488,6 +1488,23 @@ EXTERNC /*inline*/ TCHAR *memchrX(const TCHAR *__s, const TCHAR *__e, unsigned _
   return (TCHAR *)__e;
 }
 
+EXTERNC /*inline*/ CHAR *memchrXA(const CHAR *__s, const CHAR *__e, unsigned __c) {
+  if (__s > __e) {
+	  // Reverse search:
+	  for(; __s>__e; __s--)
+		  if ((CHAR)*__s==(CHAR)__c)
+			  return((CHAR *)__s);
+  } else if (__s < __e) {
+	  // Regular search:
+	  CHAR *rv;
+	  if (rv=(CHAR *)memchr(__s,__c,__e-__s))
+		  return rv;
+  }
+
+  // Not found. Return end of string.
+  return (CHAR *)__e;
+}
+
 #if NPPDEBUG && 0
 void testmemcspn(void) {
     char test[]="AABBB\0\0\0\0";
@@ -1525,6 +1542,33 @@ EXTERNC TCHAR *memstr(const TCHAR *buf, const TCHAR *end, const TCHAR *find, uns
 		return memchrX(buf, end, (TCHAR)*find);
 
 	return((TCHAR *)end);
+}
+
+EXTERNC CHAR *memstrA(const CHAR *buf, const CHAR *end, const CHAR *find, unsigned findl) {
+	if (findl > 1) {
+		if (buf <= end - findl) {
+			const CHAR *end2 = end - findl;
+			findl--;
+			//#error end2 should be used instead of end2, see library for more efficient method
+			while ((buf = (CHAR *)memchrXA(buf, end, (unsigned char)*find)) <= end2) {
+				if (buf[findl] == find[findl] && (findl == 1 || !memcmp(buf + 1, find + 1, findl - 1)))
+					return((CHAR *)buf);
+				buf++;
+			}
+		} else if (buf >= end + findl) {
+			findl--;
+			buf -= findl;
+			//#error end2 should be used instead of end2
+			while ((buf = (CHAR *)memchrXA(buf, end, (CHAR)*find)) > end) {
+				if (buf[findl] == find[findl] && (findl == 1 || !memcmp(buf + 1, find + 1, findl - 1)))
+					return((CHAR *)buf);
+				buf--;
+			}
+		}
+	} else if (findl == 1)
+		return memchrXA(buf, end, (CHAR)*find);
+
+	return((CHAR *)end);
 }
 
 // copies a buf:len to a limited size szDest buffer
@@ -2864,6 +2908,7 @@ struct _MSTR {
   unsigned char lennext; // how many characters are common between the current string and the next string
   unsigned char lenskip; // We can skip lenskip+1 forward if string[lennext-1] does not match. currentpos+lenskip+1 is permitted to exceed NELEM. If !lenskip perform a memcmp()
   //unsigned char minlength; // the smallest length in the lenskip+1 to be skipped. This enables bsearch() to locate the nearest starting location using characters up to the smallest length
+  char pad[4];  
 } g_mstring[]={
 {L""                  ,0,0 ,0,0,0}, // mstring[0] is where the search string is stored from call to call
 {L"\t"                ,0,7 ,0,0,0}, // set case insensitive strings to 0 for better efficiency
@@ -2898,6 +2943,54 @@ struct _MSTR {
 {L"<\0>"              ,0,2 ,0,0,0},
 };
 
+// the search will be faster if like first characters are placed together
+// the search will be faster if sizeof(_MSTR) is a power of two
+struct _MSTRA {
+// eventually, mstr[0] will be eliminated completely.
+// eventually, string will be a pointer and not a buffer
+  CHAR string[27]; // nocase=0: 1+the number of different search first characters
+                   // nocase=1: 1+the number of different search first characters with an extra for characters who's case differs
+  unsigned char nocase; // Each search is individually case sensitive. The entire table is handled case insensitive until we are iterating through possible matches then pick it out case sensitive if requested.
+  char rv;
+  unsigned char len; // filled in by the initializer
+  // proposed features for faster string searching
+  unsigned char lennext; // how many characters are common between the current string and the next string
+  unsigned char lenskip; // We can skip lenskip+1 forward if string[lennext-1] does not match. currentpos+lenskip+1 is permitted to exceed NELEM. If !lenskip perform a memcmp()
+  //unsigned char minlength; // the smallest length in the lenskip+1 to be skipped. This enables bsearch() to locate the nearest starting location using characters up to the smallest length
+} g_mstringA[]={
+{""                  ,0,0 ,0,0,0}, // mstring[0] is where the search string is stored from call to call
+{"\t"                ,0,7 ,0,0,0}, // set case insensitive strings to 0 for better efficiency
+{"\n"                ,0,8 ,0,0,0},
+{"\r"                ,0,8 ,0,0,0},
+{" "                 ,0,7 ,0,0,0},
+{"&#"                ,0,0 ,0,0,0},
+{"&AMP;\0&"          ,1,1 ,0,0,0},
+{"&COPY;\0(C)"       ,1,1 ,0,0,0},
+{"&GT;\0>"           ,1,1 ,0,0,0},
+{"&lT;\0<"           ,1,1 ,0,0,0},
+{"&NBSP;\0 "         ,1,1 ,0,0,0},
+{"&quot;\0\""        ,1,1 ,0,0,0},
+{"<!--\0-->"         ,0,2 ,0,0,0},
+{"</CAPTION"         ,1,3 ,0,0,0},
+{"</H"               ,1,3 ,0,0,0},
+{"</LI"              ,1,3 ,0,0,0},
+{"</PRE"             ,1,6 ,0,0,0},
+{"</P"               ,1,3 ,0,0,0},
+{"</TEXTAREA"        ,1,6 ,0,0,0},
+{"</TITLE"           ,1,3 ,0,0,0},
+{"</TR"              ,1,3 ,0,0,0},
+{"<BR"               ,1,3 ,0,0,0},
+{"<HR"               ,1,3 ,0,0,0},
+{"<PRE"              ,1,5 ,0,0,0},
+{"<P"                ,1,3 ,0,0,0},
+{"<STYLE\0</STYLE>"  ,1,2 ,0,0,0},
+{"<SCRIPT\0</SCRIPT>",1,2 ,0,0,0},
+{"<TD"               ,1,4 ,0,0,0},
+{"<TEXTAREA"         ,1,5 ,0,0,0},
+{"<TH"               ,1,4 ,0,0,0},
+{"<\0>"              ,0,2 ,0,0,0},
+};
+
 //int mstrnocase=0;
 //char *mstrxst=NULL; // if ax or bx is NULL, compare the non null with mstrxst
 
@@ -2920,6 +3013,42 @@ EXTERNC int QSORT_FCMP fcmpmstrsort(const void *ax,const void *bx) {
 #else /* } else { */
   TCHAR *ac,*bc;
   for(ac=((struct _MSTR *)ax)->string,bc=((struct _MSTR *)bx)->string; 1; ac++, bc++) {
+    //if (mstrnocase) {
+      acu=toupper(*ac);
+      bcu=toupper(*bc);
+    /*} else {
+      acu=*ac;
+      bcu=*bc;
+    }*/
+    if (acu == bcu) {
+      if (!acu) return(0);
+    } else if (!bcu) return(-1); // the longer string is always sorted first
+    else if (!acu) return(1); // the shorter string is always sorted last
+    else return(acu - bcu);
+  }
+  return 0;
+#endif /* } */
+}
+
+EXTERNC int QSORT_FCMP fcmpmstrsortA(const void *ax,const void *bx) {
+  int acu,bcu;
+#if 0 /* { Each time I try to use bsearch() I fail because of differing string lengths */
+  struct _MSTRA *am=ax;
+  struct _MSTRA *bm=bx;
+  //unsigned const char *ac,*bc;
+  if (mstrnocase) {
+    dif=toupper(am->string[0])-toupper(bm->string[0]);
+  } else {
+    dif=am->string[0]-bm->string[0];
+  }
+  if (dif) return(dif);
+  dif=bm->len-am->len;
+  if (dif) return(dif);
+  return(stricmp(am->string,bm->string));
+  //        return(stricmp(((struct _MSTR *)ax)->string,((struct _MSTR *)bx)->string));
+#else /* } else { */
+  CHAR *ac,*bc;
+  for(ac=((struct _MSTRA *)ax)->string,bc=((struct _MSTRA *)bx)->string; 1; ac++, bc++) {
     //if (mstrnocase) {
       acu=toupper(*ac);
       bcu=toupper(*bc);
@@ -2975,6 +3104,12 @@ EXTERNC size_t streqct(TCHAR *t1, TCHAR *t2) {
   return(rv);
 }
 
+EXTERNC size_t streqctA(CHAR *t1, CHAR *t2) {
+  size_t rv=0;
+  while(*t1 && *t1==*t2) {rv++; t1++; t2++; }
+  return(rv);
+}
+
 // compute the skip values in the mstring array
 EXTERNC void strmstrinit(struct _MSTR *msearch,unsigned nsearch,unsigned *cs/*,int nocase*/) {
   unsigned ch,chn;
@@ -3020,6 +3155,50 @@ EXTERNC void strmstrinit(struct _MSTR *msearch,unsigned nsearch,unsigned *cs/*,i
   msearch[0].len=lsearch;
 }
 
+EXTERNC void strmstrinitA(struct _MSTRA *msearch,unsigned nsearch,unsigned *cs/*,int nocase*/) {
+  unsigned ch,chn;
+  unsigned i,dn,up,lsearch;
+#if NPPDEBUG
+  if (!powcheck(sizeof(struct _MSTRA)))
+    MessageBoxFree(g_nppData._nppHandle, smprintf(_T("sizeof(struct _MSTRA)==%u is not a power of two"), sizeof(struct _MSTRA)), _T(PLUGIN_NAME), MB_OK|MB_ICONWARNING);
+#endif
+  //mstrnocase=nocase;
+  for(i=1; i<nsearch; i++) {
+	  msearch[i].len=strlen(msearch[i].string); msearch[i].lenskip=0;
+  }
+  qsort(msearch+1,nsearch-1,sizeof(*msearch),fcmpmstrsortA);
+  for(i=2; i<nsearch; i++)
+	  msearch[i-1].lennext=streqctA(msearch[i-1].string,msearch[i].string);
+  for(i=1; i<nsearch; i++) {
+    if ((chn=msearch[i].lennext) && !(msearch[i].lenskip)) {
+      for(dn=1; dn<256 && dn+i<nsearch && msearch[dn+i].lennext>=chn; dn++);
+      for(up=dn; up!=(unsigned)-1; up--)
+		  if (msearch[i+up].lennext==chn)
+			  msearch[i+up].lenskip=dn-up;
+    }
+  }
+  //for(i=1; i<nsearch; i++) printf("{\"%24s\",%3d,%3d,%3u,%3u,%3u},\n",msearch[i].string,msearch[i].nocase,msearch[i].rv,msearch[i].rv,msearch[i].len,msearch[i].lennext,msearch[i].lenskip);
+  for(i=0; i<256; i++) {cs[i]=(unsigned)-1; cs[i+256]=0; }
+  memset(msearch,0,sizeof(msearch[0]));
+  for(lsearch=0, i=1; i<nsearch && lsearch<sizeof(msearch[0].string); i++) {
+    ch=(unsigned)msearch[i].string[0];
+    if (/*nocase && */(tolower(ch)!=toupper(ch))) {
+      if (cs[tolower(ch)]>i) cs[tolower(ch)]=i;
+      if (cs[tolower(ch)+256]<i) cs[tolower(ch)+256]=i;
+      if (cs[toupper(ch)]>i) cs[toupper(ch)]=i;
+      if (cs[toupper(ch)+256]<i) cs[toupper(ch)+256]=i;
+    } else {
+      if (cs[ch]>i) cs[ch]=i;
+      if (cs[ch+256]<i) cs[ch+256]=i;
+    }
+    if (msearch[i].len && !strchr(msearch[0].string,ch)) {
+      msearch[0].string[lsearch++]=toupper(ch);
+      if (/*nocase &&*/ tolower(ch)!=toupper(ch)) msearch[0].string[lsearch++]=tolower(ch);
+    }
+  }
+  msearch[0].len=lsearch;
+}
+
 // When mstring search gets more advanced the close function will need to clean some stuff up.
 #define strmstrclose(mstr)
 
@@ -3051,6 +3230,33 @@ EXTERNC TCHAR *strmstr(TCHAR *str, TCHAR *end, unsigned *mno,struct _MSTR *msear
   struct _MSTR *im;
 
   if (str && str<end) for(d=str; (d=memcspn(d,end,msearch[0].string,msearch[0].len))<end; d++ ) {
+      for(i=cs[*(unsigned char *)d],im=msearch+i; i<=cs[*(unsigned char *)d+256]; /*i++,im+=sizeof(*msearch)*/) {
+          if (d>=end-im->len) {
+            i++; im++; // no space left for string
+#if 1 /* { Disables the Prefix Skip system if it doesn't work */
+        } else if (im->lennext && toupper(im->string[im->lennext-1])!=toupper(d[im->lennext-1])) { // non match at largest position, skip all possible
+          i += im->lenskip+1;
+          im = msearch+i; // this is the easiest way to do the multiplication
+#endif /* } */
+        } else if (!(im->nocase?memicmp(d,im->string,im->len):memcmp(d,im->string,im->len))) { // iterate through the possible matches checking case if requested
+          *mno=i; // someday when the iteration counts get too long, we will use bsearch() with the newly created minlength to find the iteration starting point
+          return(d);
+        } else {
+          i++; im++;
+        }
+      }
+  }
+  *mno=0;
+  return(end);
+}
+
+
+EXTERNC CHAR *strmstrA(CHAR *str, CHAR *end, unsigned *mno,struct _MSTRA *msearch/*,unsigned nsearch*/,unsigned *cs/*,int nocase*/) {
+  unsigned i;
+  CHAR *d;
+  struct _MSTRA *im;
+
+  if (str && str<end) for(d=str; (d=memcspnA(d,end,msearch[0].string,msearch[0].len))<end; d++ ) {
       for(i=cs[*(unsigned char *)d],im=msearch+i; i<=cs[*(unsigned char *)d+256]; /*i++,im+=sizeof(*msearch)*/) {
           if (d>=end-im->len) {
             i++; im++; // no space left for string
@@ -3191,6 +3397,17 @@ EXTERNC unsigned mymemset(TCHAR *s, char c, unsigned num) {
 	return(n);
 }
 
+EXTERNC unsigned mymemsetA(CHAR *s, char c, unsigned num) {
+	unsigned n = 0;
+	for (; num; num--, s++) {
+		if (*s != c) {
+			*s = c;
+			n++;
+		}
+	}
+	return(n);
+}
+
 // Search through a string for quote symbols
 // If starting at a non quote, will return the postion of the next quote, possibly end
 // If starting at a quote, will return the position after the close quote, possibly end
@@ -3215,6 +3432,34 @@ EXTERNC TCHAR *findnextquote(TCHAR *str, TCHAR *end,unsigned style) {
   }
   while(1) {
     str=memcspn(str,end,cq,wcslen(cq));
+    if (str>=end) return(end);
+    if (!style) { // C
+      if (*str!='\\') return(str+dx);
+      str+=2;
+    } else { // VB & Foxpro
+      if (style==1 && str[0]==str[1]) str+=2;
+      else return(str+dx);
+    }
+  }
+  return 0;
+}
+
+EXTERNC CHAR *findnextquoteA(CHAR *str, CHAR *end,unsigned style) {
+  unsigned dx;
+  CHAR cq[3];
+
+  if (str>=end) return(NULL);
+  if (*str=='"' || *str=='\'') {
+    strcpy(cq,style?"'":"'\\");
+    cq[0]=str[0];
+    str++;
+    dx=1;
+  } else {
+    strcpy(cq,"'\"");
+    dx=0;
+  }
+  while(1) {
+    str=memcspnA(str,end,cq,strlen(cq));
     if (str>=end) return(end);
     if (!style) { // C
       if (*str!='\\') return(str+dx);
@@ -3341,6 +3586,41 @@ failbreak:
   return(n);
 }
 
+EXTERNC unsigned space2tabsA(CHAR **dest, size_t *destsz, size_t *destlen, int usetabs, unsigned tabwidth, int preserveodd) {
+  unsigned n=0,lnew,lold,indent;
+  CHAR *d,*dp,*end;
+
+  if (*dest) {
+    for(d=*dest,end=d+*destlen; d<end; ) {
+      for(indent=0,dp=d; 1; dp++) {
+        if (*dp==' ') indent++;
+        else if (*dp=='\t') indent+=tabwidth;
+        else break;
+      }
+      lold=(dp-d);
+      if (usetabs) {
+        lnew=indent/tabwidth;
+        if (preserveodd && lnew*tabwidth!=indent) lnew=lold=0;
+      } else lnew=indent;
+          if (lnew != lold) {
+            d += memmovearmtestA((void**)dest, destsz, destlen, d+lnew, d+lold, 1);
+			if (!*dest)
+				goto failbreak;
+            end = *dest+*destlen;
+            n++;
+          }
+          if (lnew) {
+            if (mymemsetA(d, usetabs ? '\t':' ',lnew) && lnew==lold) n++;
+            d+=lnew;
+          }
+      d=memcspnA(d,end,"\r\n",2);
+      while (d<end && (*d=='\r' || *d=='\n')) d++; //d+=strspn(d,"\r\n");
+    }
+  }
+failbreak:
+  return(n);
+}
+
 struct _MSTR g_cstring[]={
 {L""                  ,0,0 ,0,0,0}, // mstring[0] is where the search string is stored from call to call
 {L"//"                ,0,1 ,0,0,0}, // set case insensitive strings to 0 for better efficiency
@@ -3359,6 +3639,24 @@ struct _MSTR g_cstring[]={
 {L"\t"                ,0,10 ,0,0,0},
 };
 
+struct _MSTRA g_cstringA[]={
+{""                  ,0,0 ,0,0,0}, // mstring[0] is where the search string is stored from call to call
+{"//"                ,0,1 ,0,0,0}, // set case insensitive strings to 0 for better efficiency
+{"/*\0*/"            ,0,2 ,0,0,0},
+{"\""                ,0,3 ,0,0,0},
+{"'"                 ,0,3 ,0,0,0},
+{"if ("              ,0,4 ,0,0,0},
+{"if("               ,0,4 ,0,0,0},
+{"\r"                ,0,5 ,0,0,0},
+{"\n"                ,0,5 ,0,0,0},
+{"("                 ,0,6 ,0,0,0},
+{")"                 ,0,7 ,0,0,0},
+{"{"                 ,0,8 ,0,0,0},
+{"}"                 ,0,9 ,0,0,0},
+{" "                 ,0,10 ,0,0,0},
+{"\t"                ,0,10 ,0,0,0},
+};
+
 /* The MinGW C libraries are more space efficient than any other compiler. The MinGW C++ libraries are
    more wasteful than any other. C++ is unnecessary, inappropriate, and wasteful for projects that can easily
    be done in C. Including any C++ project would ruin the efficiency and reliability of this project.
@@ -3373,13 +3671,13 @@ struct _MSTR g_cstring[]={
 // GNU Indent
 EXTERNC unsigned reindentcode(TCHAR **dest, size_t *destsz, size_t *destlen, int usetabs, unsigned tabwidth) {
   unsigned n=0,bktct,lold,lnew,parenct,tempindent,mno;
-  TCHAR *d,*dp,*label,*end;
+  TCHAR *ddd,*dp,*label,*end;
   unsigned quick[512];
 
   n+=space2tabs(dest, destsz, destlen, 1, tabwidth, 0);
   if (*dest) {
     strmstrinit(g_cstring,NELEM(g_cstring),quick);
-    for(tempindent=parenct=0,bktct= wcscspn(dp=d=*dest,L"\t"),end=d+*destlen; (dp=strmstr(dp,end,&mno,g_cstring,quick))<end; ) switch(g_cstring[mno].rv) {
+    for(tempindent=parenct=0,bktct= wcscspn(dp=ddd=*dest,L"\t"),end=ddd+*destlen; (dp=strmstr(dp,end,&mno,g_cstring,quick))<end; ) switch(g_cstring[mno].rv) {
     case 1: // C++ comment
       dp=memcspn(dp,end,L"\r\n",2); // this does not handle \ comment continuations which shouldn't be used anways
       break;
@@ -3396,10 +3694,10 @@ EXTERNC unsigned reindentcode(TCHAR **dest, size_t *destsz, size_t *destlen, int
       parenct=1;
       break;
     case 5: // end of line
-      if (*(dp-1)=='\\' && (*d=='#' || tempindent)) tempindent=2;
+      if (*(dp-1)=='\\' && (*ddd=='#' || tempindent)) tempindent=2;
       dp+=(*dp=='\r' && dp[1]=='\n')?2:1;
-      for(d=dp; *dp=='\t'; dp++); // d=bol, dp=currentPos
-      lold=dp-d;
+      for(ddd=dp; *dp=='\t'; dp++); // d=bol, dp=currentPos
+      lold=dp-ddd;
       lnew=bktct+parenct+(parenct?1:0)+(tempindent>1?1:0); // indent conditionals separated by lines
       if (*dp!=':') for (label=dp; *label; label++) {
         if (*label==':') {
@@ -3411,20 +3709,20 @@ EXTERNC unsigned reindentcode(TCHAR **dest, size_t *destsz, size_t *destlen, int
           break;
         }// label will be non NULL if we hit the end of file with nothing but alpha: but this will be so rare that it's not worth catching
       } else label=NULL;
-      if (/*{*/*dp=='}' || !memcmp(dp,"case ",5) || !memcmp(dp,"default:",8) || !memcmp(dp,"public:",7) || !memcmp(dp,"private:",8) || !memcmp(dp,"protected:",10)) {
+      if (/*{*/*dp=='}' || !memcmp(dp,TEXT("case "),sizeof(TCHAR)*5) || !memcmp(dp,TEXT("default:"),sizeof(TCHAR)*8) || !memcmp(dp,TEXT("public:"),sizeof(TCHAR)*7) || !memcmp(dp,TEXT("private:"),sizeof(TCHAR)*8) || !memcmp(dp,TEXT("protected:"),sizeof(TCHAR)*10)) {
         if (lnew) lnew--;
-      } else if (!*dp || *d=='#' || *d=='\r' || *d=='\n' || label) lnew=0;
+      } else if (!*dp || *ddd=='#' || *ddd=='\r' || *ddd=='\n' || label) lnew=0;
       if (lnew != lold) {
-        d+=memmovearmtest(dest,destsz,destlen,d+lnew,d+lold,1); if (!*dest) goto failbreak;
+        ddd+=memmovearmtest(dest,destsz,destlen,ddd+lnew,ddd+lold,1); if (!*dest) goto failbreak;
         end=*dest+*destlen;
         n++;
       }
       if (lnew) {
-        if (mymemset(d,'\t',lnew) && lnew==lold) n++;
-        d+=lnew;
+        if (mymemset(ddd,'\t',lnew) && lnew==lold) n++;
+        ddd+=lnew;
       }
       // new feature: if *d=='#' skip to eol
-      dp=d;
+      dp=ddd;
       if (tempindent) tempindent--;
       break;
     case 6: // (
@@ -3447,6 +3745,101 @@ failbreak:
   }
   if (!usetabs)
 	  n+=space2tabs(dest, destsz, destlen, usetabs, tabwidth, 0);
+
+  return(n);
+}
+
+/* The MinGW C libraries are more space efficient than any other compiler. The MinGW C++ libraries are
+   more wasteful than any other. C++ is unnecessary, inappropriate, and wasteful for projects that can easily
+   be done in C. Including any C++ project would ruin the efficiency and reliability of this project.
+   AStyle was poor C code in an even worse C++ wrapper, nothing I would want to reuse.
+   AStyle also doesn't indent the way I like it and was not planned with an editor in mind.
+   This does not handle certain if-else layouts because it is too much work to detect a single statement:
+  if (cond)
+     stmt;
+  else
+     stmt;*/
+// http://sourceforge.net/project/showfiles.php?group_id=126649 http://sourceforge.net/projects/gcgreatcode/
+// GNU Indent
+EXTERNC unsigned reindentcodeA(CHAR **dest, size_t *destsz, size_t *destlen, int usetabs, unsigned tabwidth) {
+  unsigned n=0,bktct,lold,lnew,parenct,tempindent,mno;
+  CHAR *ddd,*dp,*label,*end;
+  unsigned quick[512];
+
+  n+=space2tabsA(dest, destsz, destlen, 1, tabwidth, 0);
+  if (*dest) {
+    strmstrinitA(g_cstringA,NELEM(g_cstringA),quick);
+    for(tempindent=parenct=0,bktct= strcspn(dp=ddd=*dest,"\t"),end=ddd+*destlen; (dp=strmstrA(dp,end,&mno,g_cstringA,quick))<end; ) 
+
+	switch(g_cstringA[mno].rv) {
+
+    case 1: // C++ comment
+      dp=memcspnA(dp,end,"\r\n",2); // this does not handle \ comment continuations which shouldn't be used anways
+      break;
+    case 2: /* C comment */
+      dp=memstrA(dp+2,end,g_cstringA[mno].string+g_cstringA[mno].len+1,strlen(g_cstringA[mno].string+g_cstringA[mno].len+1));
+      if (dp<end) dp+=2;
+      //else dp= *dest + *destlen;
+      break;
+    case 3: // quoted string
+      dp = findnextquoteA(dp,end,0);
+      break;
+    case 4: // if (
+      dp += g_cstringA[mno].len;
+      parenct=1;
+      break;
+    case 5: // end of line
+      if (*(dp-1)=='\\' && (*ddd=='#' || tempindent)) tempindent=2;
+      dp+=(*dp=='\r' && dp[1]=='\n')?2:1;
+      for(ddd=dp; *dp=='\t'; dp++); // d=bol, dp=currentPos
+      lold=dp-ddd;
+      lnew=bktct+parenct+(parenct?1:0)+(tempindent>1?1:0); // indent conditionals separated by lines
+      if (*dp!=':') for (label=dp; *label; label++) {
+        if (*label==':') {
+          if (label[1]==':') label=NULL; // C++ class::function
+          break;
+        }
+        if (!isalnum(*label)) {
+          label=NULL;
+          break;
+        }// label will be non NULL if we hit the end of file with nothing but alpha: but this will be so rare that it's not worth catching
+      } else label=NULL;
+	  if (/*{*/*dp=='}' || !memcmp(dp,"case ",5) || !memcmp(dp,"default:",8) || !memcmp(dp,"public:",7) || !memcmp(dp,"private:",8) || !memcmp(dp,"protected:",10)) {
+		  if (lnew) lnew--;
+      } else if (!*dp || *ddd=='#' || *ddd=='\r' || *ddd=='\n' || label) lnew=0;
+      if (lnew != lold) {
+        ddd+=memmovearmtestA((void**)dest,destsz,destlen,ddd+lnew,ddd+lold,1); if (!*dest) goto failbreak;
+        end=*dest+*destlen;
+        n++;
+      }
+      if (lnew) {
+        if (mymemsetA(ddd,'\t',lnew) && lnew==lold) n++;
+        ddd+=lnew;
+      }
+      // new feature: if *d=='#' skip to eol
+      dp=ddd;
+      if (tempindent) tempindent--;
+      break;
+    case 6: // (
+      if (parenct) parenct++;
+      goto dodef;
+    case 7: // )
+      if (parenct) parenct--;
+      goto dodef;
+    case 8: // {
+      bktct++;
+      goto dodef;
+    case 9: // {
+      bktct--; // fall through to default
+    default:
+dodef:  dp++;
+      break;
+    }
+failbreak:
+    strmstrclose(mstring);
+  }
+  if (!usetabs)
+	  n+=space2tabsA(dest, destsz, destlen, usetabs, tabwidth, 0);
 
   return(n);
 }
@@ -5846,8 +6239,15 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 			rv = deleteblanklines(txUnicode, &textBufferLength, _wtol(s1));
 			break;
 		case CONVERTALL_CMD_reindentcode:
-			rv = reindentcode(&txUnicode, &allocatedTextBufferSize, &textBufferLength, SENDMSGTOCED(currentEdit, SCI_GETUSETABS, 0, 0), SENDMSGTOCED(currentEdit, SCI_GETTABWIDTH, 0, 0));
+		{
+			//rv = reindentcode(&txUnicode, &allocatedTextBufferSize, &textBufferLength, SENDMSGTOCED(currentEdit, SCI_GETUSETABS, 0, 0), SENDMSGTOCED(currentEdit, SCI_GETTABWIDTH, 0, 0));
+			
+			rv = reindentcodeA(&txUCS2, &allocatedTextBufferSize, &textBufferLength, SENDMSGTOCED(currentEdit, SCI_GETUSETABS, 0, 0), SENDMSGTOCED(currentEdit, SCI_GETTABWIDTH, 0, 0));
+
+			YEAH=1;
+
 			break;
+		}
 		case CONVERTALL_CMD_submitW3C:
 			rv = submitW3C(&txUnicode, &allocatedTextBufferSize, &textBufferLength, s1, s2);
 			break;

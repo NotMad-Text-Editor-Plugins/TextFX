@@ -269,15 +269,26 @@ namespace Tests
 
 			TCHAR buffer[100]={0};
 
-			wsprintf(buffer,TEXT("happy=%d=%d"), dataX.data(), dataX_SUB.data());
-			Logger::WriteMessage(buffer);
+			{
+				wsprintf(buffer,TEXT("happy=%d=%d"), dataX.data(), dataX_SUB.data());
+				Logger::WriteMessage(buffer);
 
-			CHAR* Xdata = new CHAR[64];
+				CHAR* Xdata = new CHAR[64];
 
-			std::string dataXX=Xdata;
+				std::string dataXX=Xdata;
 
-			wsprintf(buffer,TEXT("sad=%d=%d"), Xdata, dataXX.data());
-			Logger::WriteMessage(buffer);
+				wsprintf(buffer,TEXT("sad=%d=%d"), Xdata, dataXX.data());
+				Logger::WriteMessage(buffer);
+
+				wsprintf(buffer,TEXT("strspn #1 = %d"), strspn("http", "http://test/"));
+				Logger::WriteMessage(buffer);
+
+				wsprintf(buffer,TEXT("strspn #2 = %d"), strspn("http://tests/123", "http://tests/"));
+				Logger::WriteMessage(buffer);
+
+				wsprintf(buffer,TEXT("strspn #3 = %d"), strspn("http://tessss123", "http://test/"));
+				Logger::WriteMessage(buffer);
+			}
 
 			Logger::WriteMessage("In Data_Test ==>");
 			TCHAR* p1=new TCHAR[64]{0};
