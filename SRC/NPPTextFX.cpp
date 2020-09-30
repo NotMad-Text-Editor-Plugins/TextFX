@@ -3677,7 +3677,7 @@ EXTERNC unsigned reindentcode(TCHAR **dest, size_t *destsz, size_t *destlen, int
   n+=space2tabs(dest, destsz, destlen, 1, tabwidth, 0);
   if (*dest) {
     strmstrinit(g_cstring,NELEM(g_cstring),quick);
-    for(tempindent=parenct=0,bktct= wcscspn(dp=ddd=*dest,L"\t"),end=ddd+*destlen; (dp=strmstr(dp,end,&mno,g_cstring,quick))<end; ) switch(g_cstring[mno].rv) {
+    for(tempindent=parenct=0,bktct= wcsspn(dp=ddd=*dest,L"\t"),end=ddd+*destlen; (dp=strmstr(dp,end,&mno,g_cstring,quick))<end; ) switch(g_cstring[mno].rv) {
     case 1: // C++ comment
       dp=memcspn(dp,end,L"\r\n",2); // this does not handle \ comment continuations which shouldn't be used anways
       break;
@@ -3765,14 +3765,11 @@ EXTERNC unsigned reindentcodeA(CHAR **dest, size_t *destsz, size_t *destlen, int
   unsigned n=0,bktct,lold,lnew,parenct,tempindent,mno;
   CHAR *ddd,*dp,*label,*end;
   unsigned quick[512];
-
   n+=space2tabsA(dest, destsz, destlen, 1, tabwidth, 0);
   if (*dest) {
     strmstrinitA(g_cstringA,NELEM(g_cstringA),quick);
-    for(tempindent=parenct=0,bktct= strcspn(dp=ddd=*dest,"\t"),end=ddd+*destlen; (dp=strmstrA(dp,end,&mno,g_cstringA,quick))<end; ) 
-
+    for(tempindent=parenct=0,bktct=strspn(dp=ddd=*dest,"\t"),end=ddd+*destlen; (dp=strmstrA(dp,end,&mno,g_cstringA,quick))<end; ) 
 	switch(g_cstringA[mno].rv) {
-
     case 1: // C++ comment
       dp=memcspnA(dp,end,"\r\n",2); // this does not handle \ comment continuations which shouldn't be used anways
       break;
@@ -3791,7 +3788,7 @@ EXTERNC unsigned reindentcodeA(CHAR **dest, size_t *destsz, size_t *destlen, int
     case 5: // end of line
       if (*(dp-1)=='\\' && (*ddd=='#' || tempindent)) tempindent=2;
       dp+=(*dp=='\r' && dp[1]=='\n')?2:1;
-      for(ddd=dp; *dp=='\t'; dp++); // d=bol, dp=currentPos
+      for(ddd=dp; *dp=='\t'; dp++); // d=bol, dp=curpos
       lold=dp-ddd;
       lnew=bktct+parenct+(parenct?1:0)+(tempindent>1?1:0); // indent conditionals separated by lines
       if (*dp!=':') for (label=dp; *label; label++) {
@@ -3804,8 +3801,8 @@ EXTERNC unsigned reindentcodeA(CHAR **dest, size_t *destsz, size_t *destlen, int
           break;
         }// label will be non NULL if we hit the end of file with nothing but alpha: but this will be so rare that it's not worth catching
       } else label=NULL;
-	  if (/*{*/*dp=='}' || !memcmp(dp,"case ",5) || !memcmp(dp,"default:",8) || !memcmp(dp,"public:",7) || !memcmp(dp,"private:",8) || !memcmp(dp,"protected:",10)) {
-		  if (lnew) lnew--;
+      if (/*{*/*dp=='}' || !memcmp(dp,"case ",5) || !memcmp(dp,"default:",8) || !memcmp(dp,"public:",7) || !memcmp(dp,"private:",8) || !memcmp(dp,"protected:",10)) {
+        if (lnew) lnew--;
       } else if (!*dp || *ddd=='#' || *ddd=='\r' || *ddd=='\n' || label) lnew=0;
       if (lnew != lold) {
         ddd+=memmovearmtestA((void**)dest,destsz,destlen,ddd+lnew,ddd+lold,1); if (!*dest) goto failbreak;
@@ -3832,15 +3829,13 @@ EXTERNC unsigned reindentcodeA(CHAR **dest, size_t *destsz, size_t *destlen, int
     case 9: // {
       bktct--; // fall through to default
     default:
-dodef:  dp++;
+    dodef:  dp++;
       break;
     }
-failbreak:
+  failbreak:
     strmstrclose(mstring);
   }
-  if (!usetabs)
-	  n+=space2tabsA(dest, destsz, destlen, usetabs, tabwidth, 0);
-
+  if (!usetabs) n+=space2tabsA(dest,destsz,destlen,usetabs,tabwidth,0);
   return(n);
 }
 
