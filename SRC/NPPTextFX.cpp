@@ -6368,6 +6368,8 @@ EXTERNC void convertall(char cmd, unsigned flags, const TCHAR *s1, const TCHAR *
 					else
 						SENDMSGTOCED(currentEdit, SCI_SETSEL, posStart, posEnd);
 				}
+				// todo restore position
+				//SENDMSGTOCED(currentEdit, SCI_GOTOPOS, 0, 0);
 			} // end if (rv)
 			SENDMSGTOCED(currentEdit, SCI_ENDUNDOACTION, 0, 0);
 		} 
